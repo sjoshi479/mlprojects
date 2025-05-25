@@ -1,0 +1,5067 @@
+SELECT 
+  `data_date_key` AS `data_date_key`, 
+  `platform_name` AS `platform_name`, 
+  `brand_name` AS `brand_name`, 
+  `minutes` AS `minutes`, 
+  `tmb_programmatic_revenue` AS `tmb_programmatic_revenue`, 
+  `tmb_direct_revenue` AS `tmb_direct_revenue`, 
+  `fuse_programmatic_revenue` AS `fuse_programmatic_revenue`, 
+  `fuse_direct_revenue` AS `fuse_direct_revenue`, 
+  `indirect_revenue` AS `indirect_revenue`, 
+  `impressions` AS `impressions`, 
+  `requests` AS `requests`, 
+  `requests_1k_mins` AS `requests_1k_mins`, 
+  `platform_revenue` AS `platform_revenue`, 
+  `platform_revenue_1kmins` AS `platform_revenue_1kmins`, 
+  `tmb_total_revenue` AS `tmb_total_revenue`, 
+  `tmb_total_revenue_1k_mins` AS `tmb_total_revenue_1k_mins`, 
+  `non_tmb_total_revenue` AS `non_tmb_total_revenue`, 
+  `non_tmb_total_revenue_1k_mins` AS `non_tmb_total_revenue_1k_mins`, 
+  `cpm` AS `cpm`, 
+  `fill_rate` AS `fill_rate`, 
+  `deal_type` AS `deal_type`, 
+  `expenses_flat` AS `expenses_flat`, 
+  `expenses_percent` AS `expenses_percent`, 
+  `split_share_percent` AS `split_share_percent`, 
+  `us_vs_intl` AS `us_vs_intl` 
+FROM (select 
+data_date_key,
+platform_name,
+brand_name,
+avg(minutes) as minutes,
+avg(tmb_programmatic_revenue) as tmb_programmatic_revenue,
+avg(tmb_direct_revenue) as tmb_direct_revenue,
+avg(fuse_programmatic_revenue) as fuse_programmatic_revenue,
+avg(fuse_direct_revenue) as fuse_direct_revenue,
+avg(indirect_revenue) as indirect_revenue,
+avg(impressions) as impressions,
+avg(requests) as requests,
+avg(requests_1k_mins) as requests_1k_mins,
+avg(platform_revenue) as platform_revenue,
+avg(platform_revenue_1kmins) as platform_revenue_1kmins,
+avg(tmb_total_revenue) as tmb_total_revenue,
+avg(tmb_total_revenue_1k_mins) as tmb_total_revenue_1k_mins,
+avg(non_tmb_total_revenue) as non_tmb_total_revenue,
+avg(non_tmb_total_revenue_1k_mins) as non_tmb_total_revenue_1k_mins,
+avg(cpm) as cpm,
+avg(fill_rate) as fill_rate,
+deal_type,
+expenses_flat,
+expenses_percent,
+split_share_percent,
+us_vs_intl
+from
+(SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  `tmb_programmatic_revenue`, 
+  `tmb_direct_revenue`, 
+  `fuse_programmatic_revenue`, 
+  `fuse_direct_revenue`, 
+  `indirect_revenue`, 
+  `impressions`, 
+  `requests`, 
+  `platform_revenue`, 
+  `deal_type`, 
+  `expenses_flat`, 
+  `expenses_percent`, 
+  `split_share_percent`, 
+  `us_vs_intl`, 
+  `tmb_total_revenue`+`indirect_revenue`
+AS `tmb_total_revenue`, 
+  `non_tmb_total_revenue`, 
+  `requests_1k_mins`, 
+  `cpm`, 
+  `fill_rate`, 
+  safe_divide(`tmb_total_revenue`+`indirect_revenue`,(coalesce(`minutes`,0)*1000))
+
+AS `tmb_total_revenue_1k_mins`, 
+  safe_divide(`non_tmb_total_revenue`,(coalesce(`minutes`,0)*1000))
+
+AS `non_tmb_total_revenue_1k_mins`, 
+  safe_divide(`platform_revenue`,(coalesce(`minutes`,0)*1000))
+
+AS `platform_revenue_1kmins` 
+FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  `tmb_programmatic_revenue`, 
+  `tmb_direct_revenue`, 
+  `fuse_programmatic_revenue`, 
+  `fuse_direct_revenue`, 
+  `indirect_revenue`, 
+  `impressions`, 
+  `requests`, 
+  `platform_revenue`, 
+  `deal_type`, 
+  `expenses_flat`, 
+  `expenses_percent`, 
+  `split_share_percent`, 
+  case when `us_vs_intl` is null and lower(`platform_name`) like '%freevi%' then 'International'
+when `us_vs_intl` is null and lower(`platform_name`) not like '%freevi%' then 'Undefined'
+else `us_vs_intl`
+end
+AS `us_vs_intl`, 
+  --case 
+-- when split_share_percent is not null then platform_revenue*(safe_divide(split_share_percent,100))
+-- else platform_revenue
+-- end
+--platform_revenue*safe_divide(coalesce(split_share_percent,100),100)
+
+case 
+when split_share_percent is not null and expenses_percent > 0 then (platform_revenue - (platform_revenue*expenses_percent)) * split_share_percent
+when split_share_percent is not null and expenses_percent = 0 then platform_revenue * split_share_percent
+else platform_revenue
+end
+AS `tmb_total_revenue`, 
+  -- case 
+-- when split_share_percent is not null then platform_revenue*(1-(safe_divide(split_share_percent,100)))
+-- else 0
+-- end
+--platform_revenue*coalesce(safe_divide(coalesce(split_share_percent,0),100),0)
+
+case 
+when split_share_percent is not null and expenses_percent > 0 then (platform_revenue - (platform_revenue*expenses_percent)) * (1-split_share_percent)
+when split_share_percent is not null and expenses_percent = 0 then platform_revenue * (1-split_share_percent)
+else 0
+end
+AS `non_tmb_total_revenue`, 
+  safe_divide(`requests`,coalesce(`minutes`,0)*1000)
+AS `requests_1k_mins`, 
+  0
+AS `cpm`, 
+  safe_divide(`impressions`,`requests`)
+AS `fill_rate` 
+FROM (((SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `minutes`, 
+   `tmb_programmatic_revenue`, 
+   `tmb_direct_revenue`, 
+   `fuse_programmatic_revenue`, 
+   `fuse_direct_revenue`, 
+   `indirect_revenue`, 
+   `impressions`, 
+   `requests`, 
+   `platform_revenue`, 
+   `deal_type`, 
+   `expenses_flat`, 
+   `expenses_percent`, 
+   `split_share_percent`, 
+   `us_vs_intl` 
+ FROM ((SELECT 
+  `a`.`data_date_key` AS `data_date_key`, 
+  `a`.`platform_name` AS `platform_name`, 
+  `a`.`brand_name` AS `brand_name`, 
+  `a`.`minutes` AS `minutes`, 
+  `a`.`tmb_programmatic_revenue` AS `tmb_programmatic_revenue`, 
+  `a`.`tmb_direct_revenue` AS `tmb_direct_revenue`, 
+  `a`.`fuse_programmatic_revenue` AS `fuse_programmatic_revenue`, 
+  `a`.`fuse_direct_revenue` AS `fuse_direct_revenue`, 
+  `a`.`indirect_revenue` AS `indirect_revenue`, 
+  `a`.`impressions` AS `impressions`, 
+  `a`.`requests` AS `requests`, 
+  `a`.`platform_revenue` AS `platform_revenue`, 
+  `b`.`deal_type` AS `deal_type`, 
+  `b`.`expenses_flat` AS `expenses_flat`, 
+  `b`.`expenses_percent` AS `expenses_percent`, 
+  `b`.`split_share_percent` AS `split_share_percent`, 
+  `a`.`us_vs_intl` AS `us_vs_intl` 
+FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `us_vs_intl`, 
+  `impressions`, 
+  `requests`, 
+  `minutes`, 
+  `tmb_programmatic_revenue`, 
+  `tmb_direct_revenue`, 
+  `fuse_programmatic_revenue`, 
+  `fuse_direct_revenue`, 
+  `indirect_revenue`, 
+  `platform_revenue`, 
+  case when `platform_name` = 'Samsung US' and `brand_name` = 'At Home' then 1 else 0 end
+AS `split`, 
+  -- case 
+-- when lower(platform_name) like '%android%' and lower(platform_name) not like '%tv%' then 'Android App'
+-- when lower(platform_name) like '%android%' and lower(platform_name) like '%tv%' then 'AndroidTV App'
+-- when lower(platform_name) like '%ctv%' then 'CTV App'
+-- when lower(platform_name) like '%fire%' then 'FireTV App'
+-- -- when lower(platform_name) like '%lg%' then 'LG'
+-- -- when lower(platform_name) like '%plex%' then 'Plex'
+-- when lower(platform_name) like '%raku%' then 'Rakuten'
+-- when lower(platform_name) like '%roku%' then 'Roku App'
+-- when lower(platform_name) like '%samsung%' and lower(platform_name) not like '%inter%' then 'Samsung US'
+-- when lower(platform_name) like '%samsung%' and lower(platform_name) like '%inter%' then 'Samsung International'
+-- when lower(platform_name) like '%vid%' then 'Vidaa'
+-- when lower(platform_name) like '%viz%' then 'Vizio'
+-- when lower(platform_name) like '%ios%' then 'iOS App'
+-- else platform_name
+-- end
+
+case 
+when lower(platform_name) like '%android app%' then 'Android App'
+when lower(platform_name) like '%freevee%' then 'Freevee'
+when platform_name = 'Freeview International' then 'Freeview UK'
+when lower(platform_name) like '%fubot%' then 'Fubo'
+when lower(platform_name) like '%firetv%' then 'FireTV App'
+when lower(platform_name) like '%philo%' then 'Philo'
+when lower(platform_name) like '%rakuten%' then 'Rakuten'
+when lower(platform_name) like '%samsung app%' then 'Samsung App'
+when lower(platform_name) like '%samsung%' 
+and lower(platform_name) like '%international%' then 'Samsung International'
+when lower(platform_name) like '%samsung%' 
+and platform_name like '% US%' then 'Samsung US'
+when lower(platform_name) like '%vizio%' 
+and platform_name like '% App%' then 'Vizio App'
+when lower(platform_name) like '%vizio%' 
+and platform_name not like '% App%' then 'Vizio'
+when lower(platform_name) like '%ios app%' then 'iOS App' 
+when lower(platform_name) like '%roku app%' then 'Roku App'
+else platform_name
+end
+AS `platform_name_2` 
+FROM ((select
+data_date_key,
+platform_name,
+brand_name,
+us_vs_intl,
+impressions,
+requests,
+minutes,
+tmb_programmatic_revenue,
+tmb_direct_revenue,
+fuse_programmatic_revenue,
+fuse_direct_revenue,
+indirect_revenue,
+tmb_programmatic_revenue + tmb_direct_revenue 
++ fuse_programmatic_revenue + fuse_direct_revenue as platform_revenue
+from
+(
+--select platform_name,us_vs_intl from (
+select
+data_date_key,
+platform_name,
+brand_name,
+--case when us_vs_intl is null and is_dual is null then 'Undefined' else us_vs_intl end as us_vs_intl,
+  us_vs_intl,
+avg(coalesce(impressions,0)) as impressions,
+avg(coalesce(requests,0)) as requests,
+avg(coalesce(minutes,0)) as minutes,
+avg(coalesce(tmb_programmatic_revenue,0)) as tmb_programmatic_revenue,
+avg(coalesce(tmb_direct_revenue,0)) as tmb_direct_revenue,
+avg(coalesce(fuse_programmatic_revenue,0)) as fuse_programmatic_revenue,
+avg(coalesce(fuse_direct_revenue,0)) as fuse_direct_revenue,
+avg(coalesce(indirect_revenue,0)) as indirect_revenue
+from ((SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `us_vs_intl`, 
+   `minutes`, 
+   `tmb_programmatic_revenue`, 
+   `tmb_direct_revenue`, 
+   `fuse_programmatic_revenue`, 
+   `fuse_direct_revenue`, 
+   `impressions`, 
+   `requests`, 
+   `platform_name_2`, 
+   `indirect_filter`, 
+   CAST(`month` AS STRING) AS `month`, 
+   `year`, 
+   `is_dual`, 
+   CAST(NULL AS INT64) AS `month_int`, 
+   CAST(NULL AS INT64) AS `year_int`, 
+   CAST(NULL AS FLOAT64) AS `sum_indirect_revenue`, 
+   CAST(NULL AS INT64) AS `filter`, 
+   CAST(NULL AS FLOAT64) AS `indirect_revenue`, 
+   CAST(NULL AS DATE) AS `month_key`, 
+   CAST(NULL AS FLOAT64) AS `minutes_ratio` 
+ FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `us_vs_intl`, 
+  `minutes`, 
+  `tmb_programmatic_revenue`, 
+  `tmb_direct_revenue`, 
+  `fuse_programmatic_revenue`, 
+  `fuse_direct_revenue`, 
+  `impressions`, 
+  `requests`, 
+  case when lower(platform_name) like '%lg%' then 'LG'
+when lower(platform_name) like '%plex%' then 'Plex'
+when lower(platform_name) like '%raku%' then 'Rakuten'
+when lower(platform_name) like '%vid%' then 'Vidaa'
+when lower(platform_name) like '%viz%' then 'Vizio'
+else platform_name
+end
+AS `platform_name_2`, 
+  case when lower(platform_name) like '%lg%' then 1
+when lower(platform_name) like '%plex%' then 1
+when lower(platform_name) like '%raku%' then 1
+when lower(platform_name) like '%vid%' then 1
+when lower(platform_name) like '%vizi%' then 1
+when lower(platform_name) in ('tivify','tivo','joyn','stirr') then 1
+when lower(platform_name) like '%plut%' then 1
+else 0
+end
+AS `indirect_filter`, 
+  extract(month from data_date_key)
+
+AS `month`, 
+  extract(year from data_date_key)
+AS `year`, 
+  case when lower(platform_name) like '%lg%' then 1
+when lower(platform_name) like '%plex%' then 1
+when lower(platform_name) like '%raku%' then 1
+when lower(platform_name) like '%vid%' then 1
+when lower(platform_name) like '%vizi%' then 1
+when lower(platform_name) in ('tivify','tivo','joyn','stirr') then 1
+when lower(platform_name) like '%plut%' then 1
+else 0
+end
+AS `is_dual` 
+FROM ((select coalesce(r.data_date_key, s.data_date_key) as data_date_key
+	,coalesce(r.platform_name, s.platform_name) as platform_name
+    ,coalesce(r.brand_name, s.brand_name) as brand_name
+    ,coalesce(r.us_vs_intl,s.us_v_intl) as us_vs_intl
+    ,r.minutes
+    ,s.tmb_programmatic_revenue
+    ,s.tmb_direct_revenue
+    ,s.fuse_programmatic_revenue
+    ,s.fuse_direct_revenue
+    ,s.impressions
+    ,s.requests
+
+from (select 
+data_date_key,
+platform_name,
+brand_name,
+case when us_vs_intl is null and platform_name like '% US%' then 'US'
+when us_vs_intl is null and platform_name like '% Inter%' then 'International'
+when us_vs_intl is null and (platform_name not like '% US%' or platform_name not like '% Inter%') then 'Unassigned'
+else us_vs_intl end as us_vs_intl,
+sum_minutes as minutes,
+sum_views as views,
+sum_users as users,
+sum_sessions as sessions
+from (SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `us_vs_intl`, 
+  SUM(`minutes`) AS `sum_minutes`, 
+  SUM(`views`) AS `sum_views`, 
+  SUM(`users`) AS `sum_users`, 
+  SUM(`sessions`) AS `sum_sessions` 
+FROM (((SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(`views` AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name, " ", us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_intl`, 
+  `views`, 
+  `minutes`, 
+  'plex'
+AS `source` 
+FROM ((SELECT 
+  `plex_direct`.`data_date_key`, 
+  `plex_direct`.`platform_name`, 
+  `plex_direct`.`brand_name`, 
+  `plex_direct`.`country`, 
+  `plex_direct`.`us_vs_intl`, 
+  `plex_direct`.`views`, 
+  `plex_direct`.`minutes` 
+FROM `eminent-cache-330114`.`matillion`.`plex_direct`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(NULL AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name," ",us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  `country`, 
+  `us_vs_intl`, 
+  'pluto'
+AS `source` 
+FROM ((SELECT 
+  `pluto`.`data_date_key`, 
+  `pluto`.`platform_name`, 
+  `pluto`.`brand_name`, 
+  `pluto`.`minutes`, 
+  `pluto`.`country`, 
+  `pluto`.`us_vs_intl` 
+FROM `eminent-cache-330114`.`matillion`.`pluto`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   CAST(NULL AS STRING) AS `us_vs_intl`, 
+   CAST(NULL AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   `us_vs_international`, 
+   `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `data_date_key`, 
+  case 
+when country != 'Unassigned' then concat(platform_name," ",us_vs_international)
+else platform_name
+end
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_international`, 
+  `minutes`, 
+  'manual'
+AS `source`, 
+  case
+when platform_name in ('Amazon Fire','DirecTV App','Freevee','GoogleTV','Seven','The Roku Channel','Twitch') then 1
+else 0
+end
+AS `rev_filter` 
+FROM ((SELECT 
+  `manual_platforms`.`data_date_key`, 
+  `manual_platforms`.`platform_name`, 
+  `manual_platforms`.`brand_name`, 
+  `manual_platforms`.`country`, 
+  `manual_platforms`.`us_vs_international`, 
+  `manual_platforms`.`minutes` 
+FROM `phonic-presence-327612`.`matillion`.`manual_platforms`)))) 
+WHERE (`rev_filter` = 0)))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   CAST(NULL AS STRING) AS `country`, 
+   `us_vs_intl`, 
+   CAST(NULL AS NUMERIC) AS `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  'frequency'
+AS `source`, 
+  'Unassigned'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  `frequency`.`data_date_key`, 
+  `frequency`.`platform_name`, 
+  `frequency`.`brand_name`, 
+  `frequency`.`minutes` 
+FROM `eminent-cache-330114`.`matillion`.`frequency`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   CAST(NULL AS STRING) AS `us_vs_intl`, 
+   `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  'Freeview International'
+AS `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  `views`, 
+  'freeview uk'
+AS `source`, 
+  'UK'
+AS `country` 
+FROM ((SELECT 
+  `freeview_uk`.`data_date_key`, 
+  `freeview_uk`.`platform_name`, 
+  `freeview_uk`.`brand_name`, 
+  `freeview_uk`.`minutes`, 
+  `freeview_uk`.`views` 
+FROM `phonic-presence-327612`.`matillion`.`freeview_uk`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(`views` AS NUMERIC) AS `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `views`, 
+  `minutes`, 
+  'xumo'
+AS `source`, 
+  'Unassigned'
+AS `country`, 
+  'Unassigned'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  `xumo`.`data_date_key`, 
+  `xumo`.`platform_name`, 
+  `xumo`.`brand_name`, 
+  `xumo`.`views`, 
+  `xumo`.`minutes` 
+FROM `eminent-cache-330114`.`matillion`.`xumo`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(`views` AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name," ",us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_intl`, 
+  `minutes`, 
+  `views`, 
+  `users`, 
+  'ottera'
+AS `source` 
+FROM ((SELECT 
+  `ottera`.`data_date_key`, 
+  `ottera`.`platform_name`, 
+  `ottera`.`brand_name`, 
+  `ottera`.`country`, 
+  `ottera`.`us_vs_intl`, 
+  `ottera`.`minutes`, 
+  `ottera`.`views`, 
+  `ottera`.`users` 
+FROM `eminent-cache-330114`.`matillion`.`ottera`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(NULL AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   `users`, 
+   `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name," ",us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_intl`, 
+  `users`, 
+  `minutes`, 
+  `sessions`, 
+  'wurl'
+AS `source` 
+FROM ((SELECT 
+  `wurl`.`data_date_key`, 
+  `wurl`.`platform_name`, 
+  `wurl`.`brand_name`, 
+  `wurl`.`country`, 
+  `wurl`.`us_vs_intl`, 
+  `wurl`.`users`, 
+  `wurl`.`minutes`, 
+  `wurl`.`sessions` 
+FROM `eminent-cache-330114`.`matillion`.`wurl`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(`views` AS NUMERIC) AS `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name," ",us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_intl`, 
+  `minutes`, 
+  `views`, 
+  'cascada'
+AS `source` 
+FROM ((SELECT 
+  `cascada`.`data_date_key`, 
+  `cascada`.`platform_name`, 
+  `cascada`.`brand_name`, 
+  `cascada`.`country`, 
+  `cascada`.`us_vs_intl`, 
+  `cascada`.`minutes`, 
+  `cascada`.`views` 
+FROM `eminent-cache-330114`.`matillion`.`cascada`))))))) 
+GROUP BY `data_date_key`, 
+         `platform_name`, 
+         `brand_name`, 
+         `us_vs_intl`)
+) r
+full join (select
+data_date_key,
+platform_name,
+brand_name,
+us_v_intl,
+avg(impressions) as impressions,
+avg(requests) as requests,
+avg(tmb_programmatic_revenue) as tmb_programmatic_revenue,
+avg(tmb_direct_revenue) as tmb_direct_revenue,
+avg(fuse_programmatic_revenue) as fuse_programmatic_revenue,
+avg(fuse_direct_revenue) as fuse_direct_revenue
+from
+(
+select
+data_date_key,
+platform_name,
+brand_name,
+us_v_intl,
+sum(impressions) as impressions,
+sum(requests) as requests,
+sum(tmb_programmatic_revenue) as tmb_programmatic_revenue,
+sum(tmb_direct_revenue) as tmb_direct_revenue,
+sum(fuse_programmatic_revenue) as fuse_programmatic_revenue,
+sum(fuse_direct_revenue) as fuse_direct_revenue
+from
+(
+select 
+date as data_date_key,
+supply_tag_name,
+platform,
+case when platform = 'Android' then concat('Android App ', us_v_intl)
+when platform = 'AndroidTV' then concat('AndroidTV App ', us_v_intl)
+when platform = 'AppleTV' then concat('tvOS App ', us_v_intl)
+when platform = 'Fetch' then 'FetchTV'
+when platform = 'FireTV' then concat('FireTV App ', us_v_intl)
+when platform = 'FuboTV' then concat('FuboTV ', us_v_intl)
+when platform = 'FreeView' then concat('Freeview ', us_v_intl)
+when platform = 'LG' then concat('LG ', us_v_intl)
+when platform = 'Plex' then concat('Plex ', us_v_intl)
+when platform = 'Pluto' then concat('Pluto ', us_v_intl)
+when platform = 'Roku' then concat('Roku App ', us_v_intl)
+when platform = 'Vidaa' then concat('Vidaa ', us_v_intl)
+when platform = 'Web' then concat('Web App ', us_v_intl)
+when lower(platform) like '%vizio%app%' then concat('Vizio App ', us_v_intl)
+when lower(platform) in ('xumo','whaletv+','tivify','directtv','fetch') then platform
+when platform = 'Anoki' then 'Anoki'
+when lower(platform) = 'samsungother' then concat('Samsung Other ',us_v_intl)
+when lower(platform) in ('samsungapp','samsung apps linear') then concat('Samsung App ',us_v_intl)
+when lower(platform) = 'samsungtvmobile' then concat('Samsung TV Mobile ',us_v_intl)
+when platform = 'iOS' then concat('iOS App ',us_v_intl)
+--else concat(platform,' ',us_v_intl,'*')
+else concat(platform,' ',us_v_intl)
+end as platform_name,
+brand,
+case when lower(brand) like '%fail%' then 'FailArmy'
+when lower(brand) like '%people%' then 'People Are Awesome'
+when lower(brand) like '%taste%' or lower(brand) like '%readers%'
+or lower(brand) like '%taste%' then 'False'
+when lower(brand) like '%pet%' then 'The Pet Collective'
+when lower(brand) like '%athom%' then 'At Home'
+when lower(brand) like '%weat%' then 'WeatherSpy'
+else 'False'
+end as brand_name,
+case when lower(platform) in ('xumo','whaletv+','tivify','directtv','fetch') then 'Unassigned'
+else us_v_intl
+end as us_v_intl,
+impressions,
+requests,
+tmb_programmatic_revenue,
+tmb_direct_revenue,
+fuse_programmatic_revenue,
+fuse_direct_revenue
+from (SELECT 
+  `springserve_fuse_reconciled`.`date`, 
+  `springserve_fuse_reconciled`.`supply_tag_name`, 
+  `springserve_fuse_reconciled`.`platform`, 
+  `springserve_fuse_reconciled`.`brand`, 
+  `springserve_fuse_reconciled`.`demand_tag_name`, 
+  `springserve_fuse_reconciled`.`demand_partner_name`, 
+  `springserve_fuse_reconciled`.`country`, 
+  `springserve_fuse_reconciled`.`us_v_intl`, 
+  `springserve_fuse_reconciled`.`impressions`, 
+  `springserve_fuse_reconciled`.`requests`, 
+  `springserve_fuse_reconciled`.`tmb_programmatic_revenue`, 
+  `springserve_fuse_reconciled`.`tmb_direct_revenue`, 
+  `springserve_fuse_reconciled`.`fuse_programmatic_revenue`, 
+  `springserve_fuse_reconciled`.`fuse_direct_revenue` 
+FROM `tmbi-310016`.`streaming`.`springserve_fuse_reconciled`)
+where platform is not null
+and platform not in ('#N/A','At Home with Family Handyman',
+'People Are Awesome','The Pet Collective','Weatherspy')
+and brand is not null
+)
+group by all
+)
+group by all
+) s
+on r.data_date_key = s.data_date_key 
+and r.platform_name = s.platform_name
+and r.brand_name = s.brand_name
+)))) 
+WHERE (`indirect_filter` = 0)))) 
+UNION ALL 
+(SELECT 
+   CAST(NULL AS DATE) AS `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   CAST(NULL AS STRING) AS `us_vs_intl`, 
+   CAST(NULL AS FLOAT64) AS `minutes`, 
+   CAST(NULL AS FLOAT64) AS `tmb_programmatic_revenue`, 
+   CAST(NULL AS FLOAT64) AS `tmb_direct_revenue`, 
+   CAST(NULL AS FLOAT64) AS `fuse_programmatic_revenue`, 
+   CAST(NULL AS FLOAT64) AS `fuse_direct_revenue`, 
+   CAST(NULL AS FLOAT64) AS `impressions`, 
+   CAST(NULL AS FLOAT64) AS `requests`, 
+   CAST(NULL AS STRING) AS `platform_name_2`, 
+   CAST(NULL AS INT64) AS `indirect_filter`, 
+   CAST(`month` AS STRING) AS `month`, 
+   CAST(NULL AS INT64) AS `year`, 
+   CAST(NULL AS INT64) AS `is_dual`, 
+   `month_int`, 
+   `year_int`, 
+   `sum_indirect_revenue`, 
+   `filter`, 
+   `indirect_revenue`, 
+   `month_key`, 
+   CAST(NULL AS FLOAT64) AS `minutes_ratio` 
+ FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `platform_name`, 
+  `brand_name`, 
+  `month_int`, 
+  `year_int`, 
+  `month`, 
+  `sum_indirect_revenue`, 
+  case 
+-- when lower(platform_name) not in ('amazon fire', 'comcast', 'crackle',
+--                                    'googletv', 'imdbtv (freevee)','local now',
+--                                    'nbcu peacock','popcorn','seven','sling','twitch')
+--                                    then 1
+when lower(platform_name) not in ('') then 1
+else 0
+end
+AS `filter`, 
+  `sum_indirect_revenue`
+AS `indirect_revenue`, 
+  month
+AS `month_key` 
+FROM ((SELECT 
+  `platform_name`, 
+  `brand_name`, 
+  `month_int`, 
+  `year_int`, 
+  `month`, 
+  SUM(`indirect_revenue`) AS `sum_indirect_revenue` 
+FROM ((SELECT 
+  `month`, 
+  case
+when lower(platform_name) = 'amazon fire' then 'Amazon Fire'
+when platform_name = 'Comcast:Xumo Comcast RevShare-LOV' then 'Comcast'
+when platform_name = 'Comcast:Xumo GoogleTV' then 'GoogleTV'
+when platform_name = 'Comcast:Xumo LG' then 'LG'
+when platform_name = 'Comcast:Xumo Redbox RevSh-LOV' then 'Redbox'
+when platform_name = 'Comcast:Xumo RevShare-LOV' then 'Xumo'
+when platform_name = 'Comcast:Xumo Tivo RevSh-LOV' then 'Tivo'
+when platform_name = 'Comcast:Xumo VIDAA RevSh-LOV' then 'Vidaa'
+when platform_name = 'Comcast:Xumo Xfinity RevSh-LOV' then 'Xfinity'
+when platform_name = 'Crackle:Crackle RevSh-LOV' then 'Crackle'
+when platform_name = 'IMDbTV (Freevee)' then 'Freevee (Int + US)'
+when platform_name = 'Freevee Intl' or platform_name = "IMDbTV (Freevee) Int'"
+then 'Freevee International'
+when platform_name = 'Freevee US' or platform_name = 'IMDbTV (Freevee) US'
+then 'Freevee US'
+when platform_name = 'Joyn RevSh-LOV-EUR' then 'Joyn'
+when platform_name = 'NBC LX' then 'NBCLX'
+when platform_name = 'NBC Universal, Inc.:NBCLX-LNVD' then 'NBCLX'
+when platform_name = 'NBC Universal, Inc.:Peacock LNVD' then 'Peacock'
+when platform_name = 'Plex RevSh-LOV' then 'Plex'
+when platform_name = 'Rakuten TV-EUR' then 'Rakuten'
+when platform_name = 'Roku-TRC-RevShare' then 'The Roku Channel'
+when lower(platform_name) like '%seven%' then 'Seven'
+when platform_name = 'Sinclair Broadcast Group:Stirr RevSh-LOV' then 'Stirr'
+when lower(platform_name) like '%sling%' then 'Sling'
+when platform_name = 'Twitch Interactive, Inc:Twitch LNVD' then 'Twitch'
+when platform_name = 'Viacom Media Networks: Pluto CA' then 'Pluto International'
+when platform_name = 'Viacom Media Networks:Pluto LNVD' then 'Pluto US'
+when platform_name = 'Viacom Media Networks:Pluto LNVD EU' then 'Pluto International'
+when platform_name = 'Viacom Media Networks:Pluto LNVD LATAM' then 'Pluto International'
+
+--when lower(platform_name) = 'freevee intl' then 'Freevee International'
+when lower(platform_name) like '%pluto %' and (lower(platform_name) like '% lat%'
+or lower(platform_name) like '% eu%' or lower(platform_name) like '% can%') then 'Pluto International'
+when lower(platform_name) = 'pluto' then 'Pluto US'
+when lower(platform_name) like '%stir%' then 'Stirr'
+when lower(platform_name) like '%sling%' then 'Sling'
+when lower(platform_name) like '%seve%' then 'Seven'
+when lower(platform_name) = 'trc' then 'The Roku Channel'
+when lower(platform_name) like '%vid%' then 'Vidaa'
+when lower(platform_name) like '%viz%' then 'Vizio'
+when lower(platform_name) like '%peacoc%' then 'Peacock'
+when lower(platform_name) like '%popcorn%' then 'PopcornFlix' --uniting popcorn and popcornflix as popcornflix
+when lower(platform_name) like '%trc%' then 'The Roku Channel'
+else trim(platform_name)
+end
+AS `platform_name`, 
+  case 
+when brand_name = 'FHM' then 'At Home'
+when brand_name like '%FA%' then 'FailArmy'
+when brand_name = 'PAA' then 'People Are Awesome'
+when lower(brand_name) like '%this %' or brand_name = 'TIH' then 'This Is Happening'
+when brand_name = 'TPC' then 'The Pet Collective'
+when brand_name = 'ToH' then 'Taste of Home'
+when brand_name = 'WS' then 'WeatherSpy'
+else trim(brand_name)
+end
+AS `brand_name`, 
+  `indirect_revenue`, 
+  `platform_name_source`, 
+  extract(month from month)
+AS `month_int`, 
+  extract(year from month)
+AS `year_int`, 
+  'Undefined'
+AS `country`, 
+  'Undefined'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `month`, 
+  `platform` AS `platform_name`, 
+  `brand` AS `brand_name`, 
+  `indirect_revenue`, 
+  `platform` AS `platform_name_source` 
+FROM ((SELECT 
+  `f_indirect_revenue`.`month`, 
+  `f_indirect_revenue`.`platform`, 
+  `f_indirect_revenue`.`brand`, 
+  `f_indirect_revenue`.`indirect_revenue` 
+FROM `phonic-presence-327612`.`linear`.`f_indirect_revenue`)))) 
+WHERE (NOT(`brand_name` = 'Jukin Media') 
+      AND NOT(`brand_name` = 'Jukin Media (MRSS)') 
+      AND NOT(`brand_name` = 'Jukin Video') 
+      AND NOT(`brand_name` = 'JukinVideo') 
+      AND NOT(`brand_name` = 'RON')))))) 
+GROUP BY `platform_name`, 
+         `brand_name`, 
+         `month_int`, 
+         `year_int`, 
+         `month`)))) 
+WHERE (`filter` = 0)))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `us_vs_intl`, 
+   `minutes`, 
+   `tmb_programmatic_revenue`, 
+   `tmb_direct_revenue`, 
+   `fuse_programmatic_revenue`, 
+   `fuse_direct_revenue`, 
+   `impressions`, 
+   `requests`, 
+   CAST(NULL AS STRING) AS `platform_name_2`, 
+   CAST(NULL AS INT64) AS `indirect_filter`, 
+   CAST(NULL AS STRING) AS `month`, 
+   CAST(NULL AS INT64) AS `year`, 
+   CAST(NULL AS INT64) AS `is_dual`, 
+   CAST(NULL AS INT64) AS `month_int`, 
+   CAST(NULL AS INT64) AS `year_int`, 
+   CAST(NULL AS FLOAT64) AS `sum_indirect_revenue`, 
+   CAST(NULL AS INT64) AS `filter`, 
+   `indirect_revenue`, 
+   CAST(NULL AS DATE) AS `month_key`, 
+   `minutes_ratio` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  `minutes_ratio`, 
+  `us_vs_intl`, 
+  `tmb_programmatic_revenue`, 
+  `tmb_direct_revenue`, 
+  `fuse_programmatic_revenue`, 
+  `fuse_direct_revenue`, 
+  coalesce(indirect_revenue,0)*coalesce(minutes_ratio,0)
+AS `indirect_revenue`, 
+  `requests`, 
+  `impressions` 
+FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `a`.`data_date_key` AS `data_date_key`, 
+  `a`.`platform_name` AS `platform_name`, 
+  `a`.`brand_name` AS `brand_name`, 
+  `a`.`minutes` AS `minutes`, 
+  `a`.`minutes_ratio` AS `minutes_ratio`, 
+  `a`.`us_vs_intl` AS `us_vs_intl`, 
+  `a`.`tmb_programmatic_revenue` AS `tmb_programmatic_revenue`, 
+  `a`.`tmb_direct_revenue` AS `tmb_direct_revenue`, 
+  `a`.`fuse_programmatic_revenue` AS `fuse_programmatic_revenue`, 
+  `a`.`fuse_direct_revenue` AS `fuse_direct_revenue`, 
+  `b`.`sum_indirect_revenue` AS `indirect_revenue`, 
+  `a`.`requests` AS `requests`, 
+  `a`.`impressions` AS `impressions` 
+FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  `monthly_minutes`, 
+  `month`, 
+  `year`, 
+  `platform_name_2`, 
+  `us_vs_intl`, 
+  coalesce(tmb_programmatic_revenue,0)
+AS `tmb_programmatic_revenue`, 
+  `tmb_direct_revenue`, 
+  `fuse_programmatic_revenue`, 
+  `fuse_direct_revenue`, 
+  `requests`, 
+  `impressions`, 
+  `country`, 
+  safe_divide(minutes,monthly_minutes)
+AS `minutes_ratio` 
+FROM (((SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `minutes`, 
+   `monthly_minutes`, 
+   `month`, 
+   `year`, 
+   `platform_name_2`, 
+   `us_vs_intl`, 
+   `tmb_programmatic_revenue`, 
+   `tmb_direct_revenue`, 
+   `fuse_programmatic_revenue`, 
+   `fuse_direct_revenue`, 
+   `requests`, 
+   `impressions`, 
+   CAST(NULL AS STRING) AS `country` 
+ FROM ((SELECT 
+  `a`.`data_date_key` AS `data_date_key`, 
+  `a`.`platform_name` AS `platform_name`, 
+  `a`.`brand_name` AS `brand_name`, 
+  `a`.`minutes` AS `minutes`, 
+  `b`.`sum_minutes` AS `monthly_minutes`, 
+  `a`.`month` AS `month`, 
+  `a`.`year` AS `year`, 
+  `a`.`platform_name_2` AS `platform_name_2`, 
+  `a`.`us_vs_intl` AS `us_vs_intl`, 
+  `a`.`tmb_programmatic_revenue` AS `tmb_programmatic_revenue`, 
+  `a`.`tmb_direct_revenue` AS `tmb_direct_revenue`, 
+  `a`.`fuse_programmatic_revenue` AS `fuse_programmatic_revenue`, 
+  `a`.`fuse_direct_revenue` AS `fuse_direct_revenue`, 
+  `a`.`requests` AS `requests`, 
+  `a`.`impressions` AS `impressions` 
+FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `us_vs_intl`, 
+  `minutes`, 
+  `tmb_programmatic_revenue`, 
+  `tmb_direct_revenue`, 
+  `fuse_programmatic_revenue`, 
+  `fuse_direct_revenue`, 
+  `impressions`, 
+  `requests`, 
+  case when lower(platform_name) like '%lg%' then 'LG'
+when lower(platform_name) like '%plex%' then 'Plex'
+when lower(platform_name) like '%raku%' then 'Rakuten'
+when lower(platform_name) like '%vid%' then 'Vidaa'
+when lower(platform_name) like '%viz%' then 'Vizio'
+else platform_name
+end
+AS `platform_name_2`, 
+  case when lower(platform_name) like '%lg%' then 1
+when lower(platform_name) like '%plex%' then 1
+when lower(platform_name) like '%raku%' then 1
+when lower(platform_name) like '%vid%' then 1
+when lower(platform_name) like '%vizi%' then 1
+when lower(platform_name) in ('tivify','tivo','joyn','stirr') then 1
+when lower(platform_name) like '%plut%' then 1
+else 0
+end
+AS `indirect_filter`, 
+  extract(month from data_date_key)
+
+AS `month`, 
+  extract(year from data_date_key)
+AS `year`, 
+  case when lower(platform_name) like '%lg%' then 1
+when lower(platform_name) like '%plex%' then 1
+when lower(platform_name) like '%raku%' then 1
+when lower(platform_name) like '%vid%' then 1
+when lower(platform_name) like '%vizi%' then 1
+when lower(platform_name) in ('tivify','tivo','joyn','stirr') then 1
+when lower(platform_name) like '%plut%' then 1
+else 0
+end
+AS `is_dual` 
+FROM ((select coalesce(r.data_date_key, s.data_date_key) as data_date_key
+	,coalesce(r.platform_name, s.platform_name) as platform_name
+    ,coalesce(r.brand_name, s.brand_name) as brand_name
+    ,coalesce(r.us_vs_intl,s.us_v_intl) as us_vs_intl
+    ,r.minutes
+    ,s.tmb_programmatic_revenue
+    ,s.tmb_direct_revenue
+    ,s.fuse_programmatic_revenue
+    ,s.fuse_direct_revenue
+    ,s.impressions
+    ,s.requests
+
+from (select 
+data_date_key,
+platform_name,
+brand_name,
+case when us_vs_intl is null and platform_name like '% US%' then 'US'
+when us_vs_intl is null and platform_name like '% Inter%' then 'International'
+when us_vs_intl is null and (platform_name not like '% US%' or platform_name not like '% Inter%') then 'Unassigned'
+else us_vs_intl end as us_vs_intl,
+sum_minutes as minutes,
+sum_views as views,
+sum_users as users,
+sum_sessions as sessions
+from (SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `us_vs_intl`, 
+  SUM(`minutes`) AS `sum_minutes`, 
+  SUM(`views`) AS `sum_views`, 
+  SUM(`users`) AS `sum_users`, 
+  SUM(`sessions`) AS `sum_sessions` 
+FROM (((SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(`views` AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name, " ", us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_intl`, 
+  `views`, 
+  `minutes`, 
+  'plex'
+AS `source` 
+FROM ((SELECT 
+  `plex_direct`.`data_date_key`, 
+  `plex_direct`.`platform_name`, 
+  `plex_direct`.`brand_name`, 
+  `plex_direct`.`country`, 
+  `plex_direct`.`us_vs_intl`, 
+  `plex_direct`.`views`, 
+  `plex_direct`.`minutes` 
+FROM `eminent-cache-330114`.`matillion`.`plex_direct`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(NULL AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name," ",us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  `country`, 
+  `us_vs_intl`, 
+  'pluto'
+AS `source` 
+FROM ((SELECT 
+  `pluto`.`data_date_key`, 
+  `pluto`.`platform_name`, 
+  `pluto`.`brand_name`, 
+  `pluto`.`minutes`, 
+  `pluto`.`country`, 
+  `pluto`.`us_vs_intl` 
+FROM `eminent-cache-330114`.`matillion`.`pluto`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   CAST(NULL AS STRING) AS `us_vs_intl`, 
+   CAST(NULL AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   `us_vs_international`, 
+   `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `data_date_key`, 
+  case 
+when country != 'Unassigned' then concat(platform_name," ",us_vs_international)
+else platform_name
+end
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_international`, 
+  `minutes`, 
+  'manual'
+AS `source`, 
+  case
+when platform_name in ('Amazon Fire','DirecTV App','Freevee','GoogleTV','Seven','The Roku Channel','Twitch') then 1
+else 0
+end
+AS `rev_filter` 
+FROM ((SELECT 
+  `manual_platforms`.`data_date_key`, 
+  `manual_platforms`.`platform_name`, 
+  `manual_platforms`.`brand_name`, 
+  `manual_platforms`.`country`, 
+  `manual_platforms`.`us_vs_international`, 
+  `manual_platforms`.`minutes` 
+FROM `phonic-presence-327612`.`matillion`.`manual_platforms`)))) 
+WHERE (`rev_filter` = 0)))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   CAST(NULL AS STRING) AS `country`, 
+   `us_vs_intl`, 
+   CAST(NULL AS NUMERIC) AS `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  'frequency'
+AS `source`, 
+  'Unassigned'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  `frequency`.`data_date_key`, 
+  `frequency`.`platform_name`, 
+  `frequency`.`brand_name`, 
+  `frequency`.`minutes` 
+FROM `eminent-cache-330114`.`matillion`.`frequency`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   CAST(NULL AS STRING) AS `us_vs_intl`, 
+   `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  'Freeview International'
+AS `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  `views`, 
+  'freeview uk'
+AS `source`, 
+  'UK'
+AS `country` 
+FROM ((SELECT 
+  `freeview_uk`.`data_date_key`, 
+  `freeview_uk`.`platform_name`, 
+  `freeview_uk`.`brand_name`, 
+  `freeview_uk`.`minutes`, 
+  `freeview_uk`.`views` 
+FROM `phonic-presence-327612`.`matillion`.`freeview_uk`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(`views` AS NUMERIC) AS `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `views`, 
+  `minutes`, 
+  'xumo'
+AS `source`, 
+  'Unassigned'
+AS `country`, 
+  'Unassigned'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  `xumo`.`data_date_key`, 
+  `xumo`.`platform_name`, 
+  `xumo`.`brand_name`, 
+  `xumo`.`views`, 
+  `xumo`.`minutes` 
+FROM `eminent-cache-330114`.`matillion`.`xumo`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(`views` AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name," ",us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_intl`, 
+  `minutes`, 
+  `views`, 
+  `users`, 
+  'ottera'
+AS `source` 
+FROM ((SELECT 
+  `ottera`.`data_date_key`, 
+  `ottera`.`platform_name`, 
+  `ottera`.`brand_name`, 
+  `ottera`.`country`, 
+  `ottera`.`us_vs_intl`, 
+  `ottera`.`minutes`, 
+  `ottera`.`views`, 
+  `ottera`.`users` 
+FROM `eminent-cache-330114`.`matillion`.`ottera`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(NULL AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   `users`, 
+   `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name," ",us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_intl`, 
+  `users`, 
+  `minutes`, 
+  `sessions`, 
+  'wurl'
+AS `source` 
+FROM ((SELECT 
+  `wurl`.`data_date_key`, 
+  `wurl`.`platform_name`, 
+  `wurl`.`brand_name`, 
+  `wurl`.`country`, 
+  `wurl`.`us_vs_intl`, 
+  `wurl`.`users`, 
+  `wurl`.`minutes`, 
+  `wurl`.`sessions` 
+FROM `eminent-cache-330114`.`matillion`.`wurl`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(`views` AS NUMERIC) AS `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name," ",us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_intl`, 
+  `minutes`, 
+  `views`, 
+  'cascada'
+AS `source` 
+FROM ((SELECT 
+  `cascada`.`data_date_key`, 
+  `cascada`.`platform_name`, 
+  `cascada`.`brand_name`, 
+  `cascada`.`country`, 
+  `cascada`.`us_vs_intl`, 
+  `cascada`.`minutes`, 
+  `cascada`.`views` 
+FROM `eminent-cache-330114`.`matillion`.`cascada`))))))) 
+GROUP BY `data_date_key`, 
+         `platform_name`, 
+         `brand_name`, 
+         `us_vs_intl`)
+) r
+full join (select
+data_date_key,
+platform_name,
+brand_name,
+us_v_intl,
+avg(impressions) as impressions,
+avg(requests) as requests,
+avg(tmb_programmatic_revenue) as tmb_programmatic_revenue,
+avg(tmb_direct_revenue) as tmb_direct_revenue,
+avg(fuse_programmatic_revenue) as fuse_programmatic_revenue,
+avg(fuse_direct_revenue) as fuse_direct_revenue
+from
+(
+select
+data_date_key,
+platform_name,
+brand_name,
+us_v_intl,
+sum(impressions) as impressions,
+sum(requests) as requests,
+sum(tmb_programmatic_revenue) as tmb_programmatic_revenue,
+sum(tmb_direct_revenue) as tmb_direct_revenue,
+sum(fuse_programmatic_revenue) as fuse_programmatic_revenue,
+sum(fuse_direct_revenue) as fuse_direct_revenue
+from
+(
+select 
+date as data_date_key,
+supply_tag_name,
+platform,
+case when platform = 'Android' then concat('Android App ', us_v_intl)
+when platform = 'AndroidTV' then concat('AndroidTV App ', us_v_intl)
+when platform = 'AppleTV' then concat('tvOS App ', us_v_intl)
+when platform = 'Fetch' then 'FetchTV'
+when platform = 'FireTV' then concat('FireTV App ', us_v_intl)
+when platform = 'FuboTV' then concat('FuboTV ', us_v_intl)
+when platform = 'FreeView' then concat('Freeview ', us_v_intl)
+when platform = 'LG' then concat('LG ', us_v_intl)
+when platform = 'Plex' then concat('Plex ', us_v_intl)
+when platform = 'Pluto' then concat('Pluto ', us_v_intl)
+when platform = 'Roku' then concat('Roku App ', us_v_intl)
+when platform = 'Vidaa' then concat('Vidaa ', us_v_intl)
+when platform = 'Web' then concat('Web App ', us_v_intl)
+when lower(platform) like '%vizio%app%' then concat('Vizio App ', us_v_intl)
+when lower(platform) in ('xumo','whaletv+','tivify','directtv','fetch') then platform
+when platform = 'Anoki' then 'Anoki'
+when lower(platform) = 'samsungother' then concat('Samsung Other ',us_v_intl)
+when lower(platform) in ('samsungapp','samsung apps linear') then concat('Samsung App ',us_v_intl)
+when lower(platform) = 'samsungtvmobile' then concat('Samsung TV Mobile ',us_v_intl)
+when platform = 'iOS' then concat('iOS App ',us_v_intl)
+--else concat(platform,' ',us_v_intl,'*')
+else concat(platform,' ',us_v_intl)
+end as platform_name,
+brand,
+case when lower(brand) like '%fail%' then 'FailArmy'
+when lower(brand) like '%people%' then 'People Are Awesome'
+when lower(brand) like '%taste%' or lower(brand) like '%readers%'
+or lower(brand) like '%taste%' then 'False'
+when lower(brand) like '%pet%' then 'The Pet Collective'
+when lower(brand) like '%athom%' then 'At Home'
+when lower(brand) like '%weat%' then 'WeatherSpy'
+else 'False'
+end as brand_name,
+case when lower(platform) in ('xumo','whaletv+','tivify','directtv','fetch') then 'Unassigned'
+else us_v_intl
+end as us_v_intl,
+impressions,
+requests,
+tmb_programmatic_revenue,
+tmb_direct_revenue,
+fuse_programmatic_revenue,
+fuse_direct_revenue
+from (SELECT 
+  `springserve_fuse_reconciled`.`date`, 
+  `springserve_fuse_reconciled`.`supply_tag_name`, 
+  `springserve_fuse_reconciled`.`platform`, 
+  `springserve_fuse_reconciled`.`brand`, 
+  `springserve_fuse_reconciled`.`demand_tag_name`, 
+  `springserve_fuse_reconciled`.`demand_partner_name`, 
+  `springserve_fuse_reconciled`.`country`, 
+  `springserve_fuse_reconciled`.`us_v_intl`, 
+  `springserve_fuse_reconciled`.`impressions`, 
+  `springserve_fuse_reconciled`.`requests`, 
+  `springserve_fuse_reconciled`.`tmb_programmatic_revenue`, 
+  `springserve_fuse_reconciled`.`tmb_direct_revenue`, 
+  `springserve_fuse_reconciled`.`fuse_programmatic_revenue`, 
+  `springserve_fuse_reconciled`.`fuse_direct_revenue` 
+FROM `tmbi-310016`.`streaming`.`springserve_fuse_reconciled`)
+where platform is not null
+and platform not in ('#N/A','At Home with Family Handyman',
+'People Are Awesome','The Pet Collective','Weatherspy')
+and brand is not null
+)
+group by all
+)
+group by all
+) s
+on r.data_date_key = s.data_date_key 
+and r.platform_name = s.platform_name
+and r.brand_name = s.brand_name
+)))) 
+WHERE (`indirect_filter` = 1))) AS `a` 
+     LEFT OUTER JOIN 
+     ((SELECT 
+  `platform_name_2`, 
+  `brand_name`, 
+  `month`, 
+  `year`, 
+  SUM(`minutes`) AS `sum_minutes` 
+FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `us_vs_intl`, 
+  `minutes`, 
+  `tmb_programmatic_revenue`, 
+  `tmb_direct_revenue`, 
+  `fuse_programmatic_revenue`, 
+  `fuse_direct_revenue`, 
+  `impressions`, 
+  `requests`, 
+  case when lower(platform_name) like '%lg%' then 'LG'
+when lower(platform_name) like '%plex%' then 'Plex'
+when lower(platform_name) like '%raku%' then 'Rakuten'
+when lower(platform_name) like '%vid%' then 'Vidaa'
+when lower(platform_name) like '%viz%' then 'Vizio'
+else platform_name
+end
+AS `platform_name_2`, 
+  case when lower(platform_name) like '%lg%' then 1
+when lower(platform_name) like '%plex%' then 1
+when lower(platform_name) like '%raku%' then 1
+when lower(platform_name) like '%vid%' then 1
+when lower(platform_name) like '%vizi%' then 1
+when lower(platform_name) in ('tivify','tivo','joyn','stirr') then 1
+when lower(platform_name) like '%plut%' then 1
+else 0
+end
+AS `indirect_filter`, 
+  extract(month from data_date_key)
+
+AS `month`, 
+  extract(year from data_date_key)
+AS `year`, 
+  case when lower(platform_name) like '%lg%' then 1
+when lower(platform_name) like '%plex%' then 1
+when lower(platform_name) like '%raku%' then 1
+when lower(platform_name) like '%vid%' then 1
+when lower(platform_name) like '%vizi%' then 1
+when lower(platform_name) in ('tivify','tivo','joyn','stirr') then 1
+when lower(platform_name) like '%plut%' then 1
+else 0
+end
+AS `is_dual` 
+FROM ((select coalesce(r.data_date_key, s.data_date_key) as data_date_key
+	,coalesce(r.platform_name, s.platform_name) as platform_name
+    ,coalesce(r.brand_name, s.brand_name) as brand_name
+    ,coalesce(r.us_vs_intl,s.us_v_intl) as us_vs_intl
+    ,r.minutes
+    ,s.tmb_programmatic_revenue
+    ,s.tmb_direct_revenue
+    ,s.fuse_programmatic_revenue
+    ,s.fuse_direct_revenue
+    ,s.impressions
+    ,s.requests
+
+from (select 
+data_date_key,
+platform_name,
+brand_name,
+case when us_vs_intl is null and platform_name like '% US%' then 'US'
+when us_vs_intl is null and platform_name like '% Inter%' then 'International'
+when us_vs_intl is null and (platform_name not like '% US%' or platform_name not like '% Inter%') then 'Unassigned'
+else us_vs_intl end as us_vs_intl,
+sum_minutes as minutes,
+sum_views as views,
+sum_users as users,
+sum_sessions as sessions
+from (SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `us_vs_intl`, 
+  SUM(`minutes`) AS `sum_minutes`, 
+  SUM(`views`) AS `sum_views`, 
+  SUM(`users`) AS `sum_users`, 
+  SUM(`sessions`) AS `sum_sessions` 
+FROM (((SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(`views` AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name, " ", us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_intl`, 
+  `views`, 
+  `minutes`, 
+  'plex'
+AS `source` 
+FROM ((SELECT 
+  `plex_direct`.`data_date_key`, 
+  `plex_direct`.`platform_name`, 
+  `plex_direct`.`brand_name`, 
+  `plex_direct`.`country`, 
+  `plex_direct`.`us_vs_intl`, 
+  `plex_direct`.`views`, 
+  `plex_direct`.`minutes` 
+FROM `eminent-cache-330114`.`matillion`.`plex_direct`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(NULL AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name," ",us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  `country`, 
+  `us_vs_intl`, 
+  'pluto'
+AS `source` 
+FROM ((SELECT 
+  `pluto`.`data_date_key`, 
+  `pluto`.`platform_name`, 
+  `pluto`.`brand_name`, 
+  `pluto`.`minutes`, 
+  `pluto`.`country`, 
+  `pluto`.`us_vs_intl` 
+FROM `eminent-cache-330114`.`matillion`.`pluto`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   CAST(NULL AS STRING) AS `us_vs_intl`, 
+   CAST(NULL AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   `us_vs_international`, 
+   `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `data_date_key`, 
+  case 
+when country != 'Unassigned' then concat(platform_name," ",us_vs_international)
+else platform_name
+end
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_international`, 
+  `minutes`, 
+  'manual'
+AS `source`, 
+  case
+when platform_name in ('Amazon Fire','DirecTV App','Freevee','GoogleTV','Seven','The Roku Channel','Twitch') then 1
+else 0
+end
+AS `rev_filter` 
+FROM ((SELECT 
+  `manual_platforms`.`data_date_key`, 
+  `manual_platforms`.`platform_name`, 
+  `manual_platforms`.`brand_name`, 
+  `manual_platforms`.`country`, 
+  `manual_platforms`.`us_vs_international`, 
+  `manual_platforms`.`minutes` 
+FROM `phonic-presence-327612`.`matillion`.`manual_platforms`)))) 
+WHERE (`rev_filter` = 0)))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   CAST(NULL AS STRING) AS `country`, 
+   `us_vs_intl`, 
+   CAST(NULL AS NUMERIC) AS `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  'frequency'
+AS `source`, 
+  'Unassigned'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  `frequency`.`data_date_key`, 
+  `frequency`.`platform_name`, 
+  `frequency`.`brand_name`, 
+  `frequency`.`minutes` 
+FROM `eminent-cache-330114`.`matillion`.`frequency`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   CAST(NULL AS STRING) AS `us_vs_intl`, 
+   `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  'Freeview International'
+AS `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  `views`, 
+  'freeview uk'
+AS `source`, 
+  'UK'
+AS `country` 
+FROM ((SELECT 
+  `freeview_uk`.`data_date_key`, 
+  `freeview_uk`.`platform_name`, 
+  `freeview_uk`.`brand_name`, 
+  `freeview_uk`.`minutes`, 
+  `freeview_uk`.`views` 
+FROM `phonic-presence-327612`.`matillion`.`freeview_uk`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(`views` AS NUMERIC) AS `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `views`, 
+  `minutes`, 
+  'xumo'
+AS `source`, 
+  'Unassigned'
+AS `country`, 
+  'Unassigned'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  `xumo`.`data_date_key`, 
+  `xumo`.`platform_name`, 
+  `xumo`.`brand_name`, 
+  `xumo`.`views`, 
+  `xumo`.`minutes` 
+FROM `eminent-cache-330114`.`matillion`.`xumo`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(`views` AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name," ",us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_intl`, 
+  `minutes`, 
+  `views`, 
+  `users`, 
+  'ottera'
+AS `source` 
+FROM ((SELECT 
+  `ottera`.`data_date_key`, 
+  `ottera`.`platform_name`, 
+  `ottera`.`brand_name`, 
+  `ottera`.`country`, 
+  `ottera`.`us_vs_intl`, 
+  `ottera`.`minutes`, 
+  `ottera`.`views`, 
+  `ottera`.`users` 
+FROM `eminent-cache-330114`.`matillion`.`ottera`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(NULL AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   `users`, 
+   `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name," ",us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_intl`, 
+  `users`, 
+  `minutes`, 
+  `sessions`, 
+  'wurl'
+AS `source` 
+FROM ((SELECT 
+  `wurl`.`data_date_key`, 
+  `wurl`.`platform_name`, 
+  `wurl`.`brand_name`, 
+  `wurl`.`country`, 
+  `wurl`.`us_vs_intl`, 
+  `wurl`.`users`, 
+  `wurl`.`minutes`, 
+  `wurl`.`sessions` 
+FROM `eminent-cache-330114`.`matillion`.`wurl`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(`views` AS NUMERIC) AS `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name," ",us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_intl`, 
+  `minutes`, 
+  `views`, 
+  'cascada'
+AS `source` 
+FROM ((SELECT 
+  `cascada`.`data_date_key`, 
+  `cascada`.`platform_name`, 
+  `cascada`.`brand_name`, 
+  `cascada`.`country`, 
+  `cascada`.`us_vs_intl`, 
+  `cascada`.`minutes`, 
+  `cascada`.`views` 
+FROM `eminent-cache-330114`.`matillion`.`cascada`))))))) 
+GROUP BY `data_date_key`, 
+         `platform_name`, 
+         `brand_name`, 
+         `us_vs_intl`)
+) r
+full join (select
+data_date_key,
+platform_name,
+brand_name,
+us_v_intl,
+avg(impressions) as impressions,
+avg(requests) as requests,
+avg(tmb_programmatic_revenue) as tmb_programmatic_revenue,
+avg(tmb_direct_revenue) as tmb_direct_revenue,
+avg(fuse_programmatic_revenue) as fuse_programmatic_revenue,
+avg(fuse_direct_revenue) as fuse_direct_revenue
+from
+(
+select
+data_date_key,
+platform_name,
+brand_name,
+us_v_intl,
+sum(impressions) as impressions,
+sum(requests) as requests,
+sum(tmb_programmatic_revenue) as tmb_programmatic_revenue,
+sum(tmb_direct_revenue) as tmb_direct_revenue,
+sum(fuse_programmatic_revenue) as fuse_programmatic_revenue,
+sum(fuse_direct_revenue) as fuse_direct_revenue
+from
+(
+select 
+date as data_date_key,
+supply_tag_name,
+platform,
+case when platform = 'Android' then concat('Android App ', us_v_intl)
+when platform = 'AndroidTV' then concat('AndroidTV App ', us_v_intl)
+when platform = 'AppleTV' then concat('tvOS App ', us_v_intl)
+when platform = 'Fetch' then 'FetchTV'
+when platform = 'FireTV' then concat('FireTV App ', us_v_intl)
+when platform = 'FuboTV' then concat('FuboTV ', us_v_intl)
+when platform = 'FreeView' then concat('Freeview ', us_v_intl)
+when platform = 'LG' then concat('LG ', us_v_intl)
+when platform = 'Plex' then concat('Plex ', us_v_intl)
+when platform = 'Pluto' then concat('Pluto ', us_v_intl)
+when platform = 'Roku' then concat('Roku App ', us_v_intl)
+when platform = 'Vidaa' then concat('Vidaa ', us_v_intl)
+when platform = 'Web' then concat('Web App ', us_v_intl)
+when lower(platform) like '%vizio%app%' then concat('Vizio App ', us_v_intl)
+when lower(platform) in ('xumo','whaletv+','tivify','directtv','fetch') then platform
+when platform = 'Anoki' then 'Anoki'
+when lower(platform) = 'samsungother' then concat('Samsung Other ',us_v_intl)
+when lower(platform) in ('samsungapp','samsung apps linear') then concat('Samsung App ',us_v_intl)
+when lower(platform) = 'samsungtvmobile' then concat('Samsung TV Mobile ',us_v_intl)
+when platform = 'iOS' then concat('iOS App ',us_v_intl)
+--else concat(platform,' ',us_v_intl,'*')
+else concat(platform,' ',us_v_intl)
+end as platform_name,
+brand,
+case when lower(brand) like '%fail%' then 'FailArmy'
+when lower(brand) like '%people%' then 'People Are Awesome'
+when lower(brand) like '%taste%' or lower(brand) like '%readers%'
+or lower(brand) like '%taste%' then 'False'
+when lower(brand) like '%pet%' then 'The Pet Collective'
+when lower(brand) like '%athom%' then 'At Home'
+when lower(brand) like '%weat%' then 'WeatherSpy'
+else 'False'
+end as brand_name,
+case when lower(platform) in ('xumo','whaletv+','tivify','directtv','fetch') then 'Unassigned'
+else us_v_intl
+end as us_v_intl,
+impressions,
+requests,
+tmb_programmatic_revenue,
+tmb_direct_revenue,
+fuse_programmatic_revenue,
+fuse_direct_revenue
+from (SELECT 
+  `springserve_fuse_reconciled`.`date`, 
+  `springserve_fuse_reconciled`.`supply_tag_name`, 
+  `springserve_fuse_reconciled`.`platform`, 
+  `springserve_fuse_reconciled`.`brand`, 
+  `springserve_fuse_reconciled`.`demand_tag_name`, 
+  `springserve_fuse_reconciled`.`demand_partner_name`, 
+  `springserve_fuse_reconciled`.`country`, 
+  `springserve_fuse_reconciled`.`us_v_intl`, 
+  `springserve_fuse_reconciled`.`impressions`, 
+  `springserve_fuse_reconciled`.`requests`, 
+  `springserve_fuse_reconciled`.`tmb_programmatic_revenue`, 
+  `springserve_fuse_reconciled`.`tmb_direct_revenue`, 
+  `springserve_fuse_reconciled`.`fuse_programmatic_revenue`, 
+  `springserve_fuse_reconciled`.`fuse_direct_revenue` 
+FROM `tmbi-310016`.`streaming`.`springserve_fuse_reconciled`)
+where platform is not null
+and platform not in ('#N/A','At Home with Family Handyman',
+'People Are Awesome','The Pet Collective','Weatherspy')
+and brand is not null
+)
+group by all
+)
+group by all
+) s
+on r.data_date_key = s.data_date_key 
+and r.platform_name = s.platform_name
+and r.brand_name = s.brand_name
+)))) 
+WHERE (`indirect_filter` = 1))) 
+GROUP BY `platform_name_2`, 
+         `brand_name`, 
+         `month`, 
+         `year`)) AS `b` 
+     ON `a`.`platform_name_2` = `b`.`platform_name_2`
+and
+`a`.`brand_name` = `b`.`brand_name`
+and 
+`a`.`month` = `b`.`month`
+and
+`a`.`year` = `b`.`year`))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `minutes`, 
+   `monthly_minutes`, 
+   `month`, 
+   `year`, 
+   `platform_name_2`, 
+   `us_vs_intl`, 
+   CAST(NULL AS FLOAT64) AS `tmb_programmatic_revenue`, 
+   CAST(NULL AS FLOAT64) AS `tmb_direct_revenue`, 
+   CAST(NULL AS FLOAT64) AS `fuse_programmatic_revenue`, 
+   CAST(NULL AS FLOAT64) AS `fuse_direct_revenue`, 
+   CAST(NULL AS FLOAT64) AS `requests`, 
+   CAST(NULL AS FLOAT64) AS `impressions`, 
+   `country` 
+ FROM ((SELECT 
+  `a`.`data_date_key` AS `data_date_key`, 
+  `a`.`platform_name` AS `platform_name`, 
+  `a`.`brand_name` AS `brand_name`, 
+  `a`.`minutes` AS `minutes`, 
+  `b`.`sum_minutes` AS `monthly_minutes`, 
+  `a`.`month` AS `month`, 
+  `a`.`year` AS `year`, 
+  `a`.`platform_name_2` AS `platform_name_2`, 
+  `a`.`country` AS `country`, 
+  `a`.`us_vs_intl` AS `us_vs_intl` 
+FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `views`, 
+  `minutes`, 
+  `source`, 
+  `us_vs_intl`, 
+  `country`, 
+  `us_vs_international`, 
+  `rev_filter`, 
+  extract(month from data_date_key)
+AS `month`, 
+  extract(year from data_date_key)
+AS `year`, 
+  `platform_name`
+AS `platform_name_2` 
+FROM (((SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `views`, 
+   `minutes`, 
+   `source`, 
+   `us_vs_intl`, 
+   CAST(NULL AS STRING) AS `country`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `views`, 
+  `minutes`, 
+  'The Roku Channel'
+AS `source`, 
+  'Unassigned'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  `the_roku_channel`.`data_date_key`, 
+  `the_roku_channel`.`platform_name`, 
+  `the_roku_channel`.`brand_name`, 
+  `the_roku_channel`.`views`, 
+  `the_roku_channel`.`minutes` 
+FROM `phonic-presence-327612`.`matillion`.`the_roku_channel`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   CAST(NULL AS INT64) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_intl`, 
+   `country`, 
+   `us_vs_international`, 
+   `rev_filter` 
+ FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `data_date_key`, 
+  case 
+when country != 'Unassigned' then concat(platform_name," ",us_vs_international)
+else platform_name
+end
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_international`, 
+  `minutes`, 
+  'manual'
+AS `source`, 
+  case
+when platform_name in ('Amazon Fire','DirecTV App','Freevee','GoogleTV','Seven','The Roku Channel','Twitch') then 1
+else 0
+end
+AS `rev_filter` 
+FROM ((SELECT 
+  `manual_platforms`.`data_date_key`, 
+  `manual_platforms`.`platform_name`, 
+  `manual_platforms`.`brand_name`, 
+  `manual_platforms`.`country`, 
+  `manual_platforms`.`us_vs_international`, 
+  `manual_platforms`.`minutes` 
+FROM `phonic-presence-327612`.`matillion`.`manual_platforms`)))) 
+WHERE (`rev_filter` = 1)))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   CAST(NULL AS INT64) AS `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   `us_vs_intl`, 
+   CAST(NULL AS STRING) AS `country`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter` 
+ FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  'frequency'
+AS `source`, 
+  'Unassigned'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  `frequency`.`data_date_key`, 
+  `frequency`.`platform_name`, 
+  `frequency`.`brand_name`, 
+  `frequency`.`minutes` 
+FROM `eminent-cache-330114`.`matillion`.`frequency`)))) 
+WHERE (`platform_name` = 'Joyn' 
+      OR `platform_name` = 'Stirr' 
+      OR `platform_name` = 'Vizio' 
+      OR `platform_name` = 'Tivo' 
+      OR `platform_name` = 'Tivify')))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   `us_vs_intl`, 
+   `country`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `views`, 
+  `minutes`, 
+  'xumo'
+AS `source`, 
+  'Unassigned'
+AS `country`, 
+  'Unassigned'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  `xumo`.`data_date_key`, 
+  `xumo`.`platform_name`, 
+  `xumo`.`brand_name`, 
+  `xumo`.`views`, 
+  `xumo`.`minutes` 
+FROM `eminent-cache-330114`.`matillion`.`xumo`))))))))) AS `a` 
+     LEFT OUTER JOIN 
+     ((SELECT 
+  `platform_name`, 
+  `brand_name`, 
+  `month`, 
+  `year`, 
+  SUM(`minutes`) AS `sum_minutes` 
+FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `views`, 
+  `minutes`, 
+  `source`, 
+  `us_vs_intl`, 
+  `country`, 
+  `us_vs_international`, 
+  `rev_filter`, 
+  extract(month from data_date_key)
+AS `month`, 
+  extract(year from data_date_key)
+AS `year`, 
+  `platform_name`
+AS `platform_name_2` 
+FROM (((SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `views`, 
+   `minutes`, 
+   `source`, 
+   `us_vs_intl`, 
+   CAST(NULL AS STRING) AS `country`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `views`, 
+  `minutes`, 
+  'The Roku Channel'
+AS `source`, 
+  'Unassigned'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  `the_roku_channel`.`data_date_key`, 
+  `the_roku_channel`.`platform_name`, 
+  `the_roku_channel`.`brand_name`, 
+  `the_roku_channel`.`views`, 
+  `the_roku_channel`.`minutes` 
+FROM `phonic-presence-327612`.`matillion`.`the_roku_channel`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   CAST(NULL AS INT64) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_intl`, 
+   `country`, 
+   `us_vs_international`, 
+   `rev_filter` 
+ FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `data_date_key`, 
+  case 
+when country != 'Unassigned' then concat(platform_name," ",us_vs_international)
+else platform_name
+end
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_international`, 
+  `minutes`, 
+  'manual'
+AS `source`, 
+  case
+when platform_name in ('Amazon Fire','DirecTV App','Freevee','GoogleTV','Seven','The Roku Channel','Twitch') then 1
+else 0
+end
+AS `rev_filter` 
+FROM ((SELECT 
+  `manual_platforms`.`data_date_key`, 
+  `manual_platforms`.`platform_name`, 
+  `manual_platforms`.`brand_name`, 
+  `manual_platforms`.`country`, 
+  `manual_platforms`.`us_vs_international`, 
+  `manual_platforms`.`minutes` 
+FROM `phonic-presence-327612`.`matillion`.`manual_platforms`)))) 
+WHERE (`rev_filter` = 1)))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   CAST(NULL AS INT64) AS `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   `us_vs_intl`, 
+   CAST(NULL AS STRING) AS `country`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter` 
+ FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  'frequency'
+AS `source`, 
+  'Unassigned'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  `frequency`.`data_date_key`, 
+  `frequency`.`platform_name`, 
+  `frequency`.`brand_name`, 
+  `frequency`.`minutes` 
+FROM `eminent-cache-330114`.`matillion`.`frequency`)))) 
+WHERE (`platform_name` = 'Joyn' 
+      OR `platform_name` = 'Stirr' 
+      OR `platform_name` = 'Vizio' 
+      OR `platform_name` = 'Tivo' 
+      OR `platform_name` = 'Tivify')))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   `us_vs_intl`, 
+   `country`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `views`, 
+  `minutes`, 
+  'xumo'
+AS `source`, 
+  'Unassigned'
+AS `country`, 
+  'Unassigned'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  `xumo`.`data_date_key`, 
+  `xumo`.`platform_name`, 
+  `xumo`.`brand_name`, 
+  `xumo`.`views`, 
+  `xumo`.`minutes` 
+FROM `eminent-cache-330114`.`matillion`.`xumo`))))))))) 
+GROUP BY `platform_name`, 
+         `brand_name`, 
+         `month`, 
+         `year`)) AS `b` 
+     ON `a`.`platform_name` = `b`.`platform_name`
+and
+`a`.`brand_name` = `b`.`brand_name`
+and
+`a`.`month` = `b`.`month`
+and
+`a`.`year` = `b`.`year`))))))) AS `a` 
+     LEFT OUTER JOIN 
+     ((SELECT 
+  * 
+FROM ((SELECT 
+  `platform_name`, 
+  `brand_name`, 
+  `month_int`, 
+  `year_int`, 
+  `month`, 
+  `sum_indirect_revenue`, 
+  case 
+-- when lower(platform_name) not in ('amazon fire', 'comcast', 'crackle',
+--                                    'googletv', 'imdbtv (freevee)','local now',
+--                                    'nbcu peacock','popcorn','seven','sling','twitch')
+--                                    then 1
+when lower(platform_name) not in ('') then 1
+else 0
+end
+AS `filter`, 
+  `sum_indirect_revenue`
+AS `indirect_revenue`, 
+  month
+AS `month_key` 
+FROM ((SELECT 
+  `platform_name`, 
+  `brand_name`, 
+  `month_int`, 
+  `year_int`, 
+  `month`, 
+  SUM(`indirect_revenue`) AS `sum_indirect_revenue` 
+FROM ((SELECT 
+  `month`, 
+  case
+when lower(platform_name) = 'amazon fire' then 'Amazon Fire'
+when platform_name = 'Comcast:Xumo Comcast RevShare-LOV' then 'Comcast'
+when platform_name = 'Comcast:Xumo GoogleTV' then 'GoogleTV'
+when platform_name = 'Comcast:Xumo LG' then 'LG'
+when platform_name = 'Comcast:Xumo Redbox RevSh-LOV' then 'Redbox'
+when platform_name = 'Comcast:Xumo RevShare-LOV' then 'Xumo'
+when platform_name = 'Comcast:Xumo Tivo RevSh-LOV' then 'Tivo'
+when platform_name = 'Comcast:Xumo VIDAA RevSh-LOV' then 'Vidaa'
+when platform_name = 'Comcast:Xumo Xfinity RevSh-LOV' then 'Xfinity'
+when platform_name = 'Crackle:Crackle RevSh-LOV' then 'Crackle'
+when platform_name = 'IMDbTV (Freevee)' then 'Freevee (Int + US)'
+when platform_name = 'Freevee Intl' or platform_name = "IMDbTV (Freevee) Int'"
+then 'Freevee International'
+when platform_name = 'Freevee US' or platform_name = 'IMDbTV (Freevee) US'
+then 'Freevee US'
+when platform_name = 'Joyn RevSh-LOV-EUR' then 'Joyn'
+when platform_name = 'NBC LX' then 'NBCLX'
+when platform_name = 'NBC Universal, Inc.:NBCLX-LNVD' then 'NBCLX'
+when platform_name = 'NBC Universal, Inc.:Peacock LNVD' then 'Peacock'
+when platform_name = 'Plex RevSh-LOV' then 'Plex'
+when platform_name = 'Rakuten TV-EUR' then 'Rakuten'
+when platform_name = 'Roku-TRC-RevShare' then 'The Roku Channel'
+when lower(platform_name) like '%seven%' then 'Seven'
+when platform_name = 'Sinclair Broadcast Group:Stirr RevSh-LOV' then 'Stirr'
+when lower(platform_name) like '%sling%' then 'Sling'
+when platform_name = 'Twitch Interactive, Inc:Twitch LNVD' then 'Twitch'
+when platform_name = 'Viacom Media Networks: Pluto CA' then 'Pluto International'
+when platform_name = 'Viacom Media Networks:Pluto LNVD' then 'Pluto US'
+when platform_name = 'Viacom Media Networks:Pluto LNVD EU' then 'Pluto International'
+when platform_name = 'Viacom Media Networks:Pluto LNVD LATAM' then 'Pluto International'
+
+--when lower(platform_name) = 'freevee intl' then 'Freevee International'
+when lower(platform_name) like '%pluto %' and (lower(platform_name) like '% lat%'
+or lower(platform_name) like '% eu%' or lower(platform_name) like '% can%') then 'Pluto International'
+when lower(platform_name) = 'pluto' then 'Pluto US'
+when lower(platform_name) like '%stir%' then 'Stirr'
+when lower(platform_name) like '%sling%' then 'Sling'
+when lower(platform_name) like '%seve%' then 'Seven'
+when lower(platform_name) = 'trc' then 'The Roku Channel'
+when lower(platform_name) like '%vid%' then 'Vidaa'
+when lower(platform_name) like '%viz%' then 'Vizio'
+when lower(platform_name) like '%peacoc%' then 'Peacock'
+when lower(platform_name) like '%popcorn%' then 'PopcornFlix' --uniting popcorn and popcornflix as popcornflix
+when lower(platform_name) like '%trc%' then 'The Roku Channel'
+else trim(platform_name)
+end
+AS `platform_name`, 
+  case 
+when brand_name = 'FHM' then 'At Home'
+when brand_name like '%FA%' then 'FailArmy'
+when brand_name = 'PAA' then 'People Are Awesome'
+when lower(brand_name) like '%this %' or brand_name = 'TIH' then 'This Is Happening'
+when brand_name = 'TPC' then 'The Pet Collective'
+when brand_name = 'ToH' then 'Taste of Home'
+when brand_name = 'WS' then 'WeatherSpy'
+else trim(brand_name)
+end
+AS `brand_name`, 
+  `indirect_revenue`, 
+  `platform_name_source`, 
+  extract(month from month)
+AS `month_int`, 
+  extract(year from month)
+AS `year_int`, 
+  'Undefined'
+AS `country`, 
+  'Undefined'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `month`, 
+  `platform` AS `platform_name`, 
+  `brand` AS `brand_name`, 
+  `indirect_revenue`, 
+  `platform` AS `platform_name_source` 
+FROM ((SELECT 
+  `f_indirect_revenue`.`month`, 
+  `f_indirect_revenue`.`platform`, 
+  `f_indirect_revenue`.`brand`, 
+  `f_indirect_revenue`.`indirect_revenue` 
+FROM `phonic-presence-327612`.`linear`.`f_indirect_revenue`)))) 
+WHERE (NOT(`brand_name` = 'Jukin Media') 
+      AND NOT(`brand_name` = 'Jukin Media (MRSS)') 
+      AND NOT(`brand_name` = 'Jukin Video') 
+      AND NOT(`brand_name` = 'JukinVideo') 
+      AND NOT(`brand_name` = 'RON')))))) 
+GROUP BY `platform_name`, 
+         `brand_name`, 
+         `month_int`, 
+         `year_int`, 
+         `month`)))) 
+WHERE (`filter` = 1))) AS `b` 
+     ON `a`.`platform_name_2` = `b`.`platform_name`
+and
+`a`.`brand_name` = `b`.`brand_name`
+and 
+`a`.`month` = `b`.`month_int`
+and
+`a`.`year` = `b`.`year_int`)) 
+WHERE (NOT(`data_date_key` IS NULL))))))))
+group by all
+--) group by all order by 1,2
+)
+)))) 
+WHERE (`split` = 1))) AS `a` 
+     LEFT OUTER JOIN 
+     ((SELECT 
+  * 
+FROM ((SELECT 
+  `platform`, 
+  `brand`, 
+  `deal_type`, 
+  coalesce(safe_divide(cast(replace(expenses_flat,",","") as float64),10000),0)
+AS `expenses_flat`, 
+  coalesce(safe_divide(cast(replace(expenses_percent,",","") as float64),10000),0)
+AS `expenses_percent`, 
+  coalesce(safe_divide(cast(replace(split_share_percent,",","") as float64),10000),0)
+AS `split_share_percent`, 
+  `data_date_key`, 
+  -- case
+-- when lower(platform) like '%fet%' then 'FetchTV'
+-- when lower(platform) like '%fub%' then 'Fubo TV App'
+-- when lower(platform) like '%ios%' then 'iOS App'
+-- when lower(platform) like '%plex in%' then 'Plex International'
+-- when lower(platform) like '%plex' then 'Plex US'
+-- when lower(platform) like '%pluto in%' then 'Pluto International'
+-- when lower(platform) like '%pluto' then 'Pluto US'
+-- when lower(platform) like '%rok%' then 'Roku'
+-- when lower(platform) like '%samsung%' and lower(platform) not like '%intern%'
+-- then 'Samsung US'
+-- when lower(platform) like '%samsung%' and lower(platform) like '%intern%'
+-- then 'Samsung International'
+-- when lower(platform) like '%viz%' then 'Vizio'
+-- when lower(platform) like '%zeas%' then 'WhaleTV+'
+-- else trim(platform)
+-- end
+
+case when platform = 'Fetch' then 'FetchTV'
+when platform = 'Fire App' then 'FireTV App'
+when platform = 'Pluto' then 'Pluto US'
+when platform = 'Pluto Intl' then 'Pluto International'
+when platform = 'Plex' then 'Plex US'
+when platform = 'Plex Intl' then 'Plex International'
+when lower(platform) like '%roku%' then 'Roku App'
+when platform = 'Zeasn' then 'WhaleTV+'
+when platform = 'iOS-App' then 'iOS App'
+else trim(platform)
+end
+AS `platform_name`, 
+  case 
+when lower(brand) like '%at%' then 'At Home'
+else coalesce(brand,'NA')
+end
+AS `brand_name` 
+FROM ((SELECT 
+  `inventory_split_revenue_share`.`platform`, 
+  `inventory_split_revenue_share`.`brand`, 
+  `inventory_split_revenue_share`.`deal_type`, 
+  `inventory_split_revenue_share`.`expenses_flat`, 
+  `inventory_split_revenue_share`.`expenses_percent`, 
+  `inventory_split_revenue_share`.`split_share_percent`, 
+  `inventory_split_revenue_share`.`data_date_key` 
+FROM `eminent-cache-330114`.`google_sheets`.`inventory_split_revenue_share`)))) 
+WHERE (NOT(`brand_name` = 'NA')))) AS `b` 
+     ON `a`.`platform_name_2` = `b`.`platform_name`
+and 
+`a`.`brand_name` = `b`.`brand_name`))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `minutes`, 
+   `tmb_programmatic_revenue`, 
+   `tmb_direct_revenue`, 
+   `fuse_programmatic_revenue`, 
+   `fuse_direct_revenue`, 
+   `indirect_revenue`, 
+   `impressions`, 
+   `requests`, 
+   `platform_revenue`, 
+   `deal_type`, 
+   `expenses_flat`, 
+   `expenses_percent`, 
+   `split_share_percent`, 
+   `us_vs_intl` 
+ FROM ((SELECT 
+  `a`.`data_date_key` AS `data_date_key`, 
+  `a`.`platform_name` AS `platform_name`, 
+  `a`.`brand_name` AS `brand_name`, 
+  `a`.`minutes` AS `minutes`, 
+  `a`.`tmb_programmatic_revenue` AS `tmb_programmatic_revenue`, 
+  `a`.`tmb_direct_revenue` AS `tmb_direct_revenue`, 
+  `a`.`fuse_programmatic_revenue` AS `fuse_programmatic_revenue`, 
+  `a`.`fuse_direct_revenue` AS `fuse_direct_revenue`, 
+  `a`.`indirect_revenue` AS `indirect_revenue`, 
+  `a`.`impressions` AS `impressions`, 
+  `a`.`requests` AS `requests`, 
+  `a`.`platform_revenue` AS `platform_revenue`, 
+  `b`.`deal_type` AS `deal_type`, 
+  `b`.`expenses_flat` AS `expenses_flat`, 
+  `b`.`expenses_percent` AS `expenses_percent`, 
+  `b`.`split_share_percent` AS `split_share_percent`, 
+  `a`.`us_vs_intl` AS `us_vs_intl` 
+FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `us_vs_intl`, 
+  `impressions`, 
+  `requests`, 
+  `minutes`, 
+  `tmb_programmatic_revenue`, 
+  `tmb_direct_revenue`, 
+  `fuse_programmatic_revenue`, 
+  `fuse_direct_revenue`, 
+  `indirect_revenue`, 
+  `platform_revenue`, 
+  case when `platform_name` = 'Samsung US' and `brand_name` = 'At Home' then 1 else 0 end
+AS `split`, 
+  -- case 
+-- when lower(platform_name) like '%android%' and lower(platform_name) not like '%tv%' then 'Android App'
+-- when lower(platform_name) like '%android%' and lower(platform_name) like '%tv%' then 'AndroidTV App'
+-- when lower(platform_name) like '%ctv%' then 'CTV App'
+-- when lower(platform_name) like '%fire%' then 'FireTV App'
+-- -- when lower(platform_name) like '%lg%' then 'LG'
+-- -- when lower(platform_name) like '%plex%' then 'Plex'
+-- when lower(platform_name) like '%raku%' then 'Rakuten'
+-- when lower(platform_name) like '%roku%' then 'Roku App'
+-- when lower(platform_name) like '%samsung%' and lower(platform_name) not like '%inter%' then 'Samsung US'
+-- when lower(platform_name) like '%samsung%' and lower(platform_name) like '%inter%' then 'Samsung International'
+-- when lower(platform_name) like '%vid%' then 'Vidaa'
+-- when lower(platform_name) like '%viz%' then 'Vizio'
+-- when lower(platform_name) like '%ios%' then 'iOS App'
+-- else platform_name
+-- end
+
+case 
+when lower(platform_name) like '%android app%' then 'Android App'
+when lower(platform_name) like '%freevee%' then 'Freevee'
+when platform_name = 'Freeview International' then 'Freeview UK'
+when lower(platform_name) like '%fubot%' then 'Fubo'
+when lower(platform_name) like '%firetv%' then 'FireTV App'
+when lower(platform_name) like '%philo%' then 'Philo'
+when lower(platform_name) like '%rakuten%' then 'Rakuten'
+when lower(platform_name) like '%samsung app%' then 'Samsung App'
+when lower(platform_name) like '%samsung%' 
+and lower(platform_name) like '%international%' then 'Samsung International'
+when lower(platform_name) like '%samsung%' 
+and platform_name like '% US%' then 'Samsung US'
+when lower(platform_name) like '%vizio%' 
+and platform_name like '% App%' then 'Vizio App'
+when lower(platform_name) like '%vizio%' 
+and platform_name not like '% App%' then 'Vizio'
+when lower(platform_name) like '%ios app%' then 'iOS App' 
+when lower(platform_name) like '%roku app%' then 'Roku App'
+else platform_name
+end
+AS `platform_name_2` 
+FROM ((select
+data_date_key,
+platform_name,
+brand_name,
+us_vs_intl,
+impressions,
+requests,
+minutes,
+tmb_programmatic_revenue,
+tmb_direct_revenue,
+fuse_programmatic_revenue,
+fuse_direct_revenue,
+indirect_revenue,
+tmb_programmatic_revenue + tmb_direct_revenue 
++ fuse_programmatic_revenue + fuse_direct_revenue as platform_revenue
+from
+(
+--select platform_name,us_vs_intl from (
+select
+data_date_key,
+platform_name,
+brand_name,
+--case when us_vs_intl is null and is_dual is null then 'Undefined' else us_vs_intl end as us_vs_intl,
+  us_vs_intl,
+avg(coalesce(impressions,0)) as impressions,
+avg(coalesce(requests,0)) as requests,
+avg(coalesce(minutes,0)) as minutes,
+avg(coalesce(tmb_programmatic_revenue,0)) as tmb_programmatic_revenue,
+avg(coalesce(tmb_direct_revenue,0)) as tmb_direct_revenue,
+avg(coalesce(fuse_programmatic_revenue,0)) as fuse_programmatic_revenue,
+avg(coalesce(fuse_direct_revenue,0)) as fuse_direct_revenue,
+avg(coalesce(indirect_revenue,0)) as indirect_revenue
+from ((SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `us_vs_intl`, 
+   `minutes`, 
+   `tmb_programmatic_revenue`, 
+   `tmb_direct_revenue`, 
+   `fuse_programmatic_revenue`, 
+   `fuse_direct_revenue`, 
+   `impressions`, 
+   `requests`, 
+   `platform_name_2`, 
+   `indirect_filter`, 
+   CAST(`month` AS STRING) AS `month`, 
+   `year`, 
+   `is_dual`, 
+   CAST(NULL AS INT64) AS `month_int`, 
+   CAST(NULL AS INT64) AS `year_int`, 
+   CAST(NULL AS FLOAT64) AS `sum_indirect_revenue`, 
+   CAST(NULL AS INT64) AS `filter`, 
+   CAST(NULL AS FLOAT64) AS `indirect_revenue`, 
+   CAST(NULL AS DATE) AS `month_key`, 
+   CAST(NULL AS FLOAT64) AS `minutes_ratio` 
+ FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `us_vs_intl`, 
+  `minutes`, 
+  `tmb_programmatic_revenue`, 
+  `tmb_direct_revenue`, 
+  `fuse_programmatic_revenue`, 
+  `fuse_direct_revenue`, 
+  `impressions`, 
+  `requests`, 
+  case when lower(platform_name) like '%lg%' then 'LG'
+when lower(platform_name) like '%plex%' then 'Plex'
+when lower(platform_name) like '%raku%' then 'Rakuten'
+when lower(platform_name) like '%vid%' then 'Vidaa'
+when lower(platform_name) like '%viz%' then 'Vizio'
+else platform_name
+end
+AS `platform_name_2`, 
+  case when lower(platform_name) like '%lg%' then 1
+when lower(platform_name) like '%plex%' then 1
+when lower(platform_name) like '%raku%' then 1
+when lower(platform_name) like '%vid%' then 1
+when lower(platform_name) like '%vizi%' then 1
+when lower(platform_name) in ('tivify','tivo','joyn','stirr') then 1
+when lower(platform_name) like '%plut%' then 1
+else 0
+end
+AS `indirect_filter`, 
+  extract(month from data_date_key)
+
+AS `month`, 
+  extract(year from data_date_key)
+AS `year`, 
+  case when lower(platform_name) like '%lg%' then 1
+when lower(platform_name) like '%plex%' then 1
+when lower(platform_name) like '%raku%' then 1
+when lower(platform_name) like '%vid%' then 1
+when lower(platform_name) like '%vizi%' then 1
+when lower(platform_name) in ('tivify','tivo','joyn','stirr') then 1
+when lower(platform_name) like '%plut%' then 1
+else 0
+end
+AS `is_dual` 
+FROM ((select coalesce(r.data_date_key, s.data_date_key) as data_date_key
+	,coalesce(r.platform_name, s.platform_name) as platform_name
+    ,coalesce(r.brand_name, s.brand_name) as brand_name
+    ,coalesce(r.us_vs_intl,s.us_v_intl) as us_vs_intl
+    ,r.minutes
+    ,s.tmb_programmatic_revenue
+    ,s.tmb_direct_revenue
+    ,s.fuse_programmatic_revenue
+    ,s.fuse_direct_revenue
+    ,s.impressions
+    ,s.requests
+
+from (select 
+data_date_key,
+platform_name,
+brand_name,
+case when us_vs_intl is null and platform_name like '% US%' then 'US'
+when us_vs_intl is null and platform_name like '% Inter%' then 'International'
+when us_vs_intl is null and (platform_name not like '% US%' or platform_name not like '% Inter%') then 'Unassigned'
+else us_vs_intl end as us_vs_intl,
+sum_minutes as minutes,
+sum_views as views,
+sum_users as users,
+sum_sessions as sessions
+from (SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `us_vs_intl`, 
+  SUM(`minutes`) AS `sum_minutes`, 
+  SUM(`views`) AS `sum_views`, 
+  SUM(`users`) AS `sum_users`, 
+  SUM(`sessions`) AS `sum_sessions` 
+FROM (((SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(`views` AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name, " ", us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_intl`, 
+  `views`, 
+  `minutes`, 
+  'plex'
+AS `source` 
+FROM ((SELECT 
+  `plex_direct`.`data_date_key`, 
+  `plex_direct`.`platform_name`, 
+  `plex_direct`.`brand_name`, 
+  `plex_direct`.`country`, 
+  `plex_direct`.`us_vs_intl`, 
+  `plex_direct`.`views`, 
+  `plex_direct`.`minutes` 
+FROM `eminent-cache-330114`.`matillion`.`plex_direct`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(NULL AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name," ",us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  `country`, 
+  `us_vs_intl`, 
+  'pluto'
+AS `source` 
+FROM ((SELECT 
+  `pluto`.`data_date_key`, 
+  `pluto`.`platform_name`, 
+  `pluto`.`brand_name`, 
+  `pluto`.`minutes`, 
+  `pluto`.`country`, 
+  `pluto`.`us_vs_intl` 
+FROM `eminent-cache-330114`.`matillion`.`pluto`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   CAST(NULL AS STRING) AS `us_vs_intl`, 
+   CAST(NULL AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   `us_vs_international`, 
+   `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `data_date_key`, 
+  case 
+when country != 'Unassigned' then concat(platform_name," ",us_vs_international)
+else platform_name
+end
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_international`, 
+  `minutes`, 
+  'manual'
+AS `source`, 
+  case
+when platform_name in ('Amazon Fire','DirecTV App','Freevee','GoogleTV','Seven','The Roku Channel','Twitch') then 1
+else 0
+end
+AS `rev_filter` 
+FROM ((SELECT 
+  `manual_platforms`.`data_date_key`, 
+  `manual_platforms`.`platform_name`, 
+  `manual_platforms`.`brand_name`, 
+  `manual_platforms`.`country`, 
+  `manual_platforms`.`us_vs_international`, 
+  `manual_platforms`.`minutes` 
+FROM `phonic-presence-327612`.`matillion`.`manual_platforms`)))) 
+WHERE (`rev_filter` = 0)))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   CAST(NULL AS STRING) AS `country`, 
+   `us_vs_intl`, 
+   CAST(NULL AS NUMERIC) AS `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  'frequency'
+AS `source`, 
+  'Unassigned'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  `frequency`.`data_date_key`, 
+  `frequency`.`platform_name`, 
+  `frequency`.`brand_name`, 
+  `frequency`.`minutes` 
+FROM `eminent-cache-330114`.`matillion`.`frequency`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   CAST(NULL AS STRING) AS `us_vs_intl`, 
+   `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  'Freeview International'
+AS `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  `views`, 
+  'freeview uk'
+AS `source`, 
+  'UK'
+AS `country` 
+FROM ((SELECT 
+  `freeview_uk`.`data_date_key`, 
+  `freeview_uk`.`platform_name`, 
+  `freeview_uk`.`brand_name`, 
+  `freeview_uk`.`minutes`, 
+  `freeview_uk`.`views` 
+FROM `phonic-presence-327612`.`matillion`.`freeview_uk`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(`views` AS NUMERIC) AS `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `views`, 
+  `minutes`, 
+  'xumo'
+AS `source`, 
+  'Unassigned'
+AS `country`, 
+  'Unassigned'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  `xumo`.`data_date_key`, 
+  `xumo`.`platform_name`, 
+  `xumo`.`brand_name`, 
+  `xumo`.`views`, 
+  `xumo`.`minutes` 
+FROM `eminent-cache-330114`.`matillion`.`xumo`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(`views` AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name," ",us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_intl`, 
+  `minutes`, 
+  `views`, 
+  `users`, 
+  'ottera'
+AS `source` 
+FROM ((SELECT 
+  `ottera`.`data_date_key`, 
+  `ottera`.`platform_name`, 
+  `ottera`.`brand_name`, 
+  `ottera`.`country`, 
+  `ottera`.`us_vs_intl`, 
+  `ottera`.`minutes`, 
+  `ottera`.`views`, 
+  `ottera`.`users` 
+FROM `eminent-cache-330114`.`matillion`.`ottera`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(NULL AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   `users`, 
+   `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name," ",us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_intl`, 
+  `users`, 
+  `minutes`, 
+  `sessions`, 
+  'wurl'
+AS `source` 
+FROM ((SELECT 
+  `wurl`.`data_date_key`, 
+  `wurl`.`platform_name`, 
+  `wurl`.`brand_name`, 
+  `wurl`.`country`, 
+  `wurl`.`us_vs_intl`, 
+  `wurl`.`users`, 
+  `wurl`.`minutes`, 
+  `wurl`.`sessions` 
+FROM `eminent-cache-330114`.`matillion`.`wurl`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(`views` AS NUMERIC) AS `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name," ",us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_intl`, 
+  `minutes`, 
+  `views`, 
+  'cascada'
+AS `source` 
+FROM ((SELECT 
+  `cascada`.`data_date_key`, 
+  `cascada`.`platform_name`, 
+  `cascada`.`brand_name`, 
+  `cascada`.`country`, 
+  `cascada`.`us_vs_intl`, 
+  `cascada`.`minutes`, 
+  `cascada`.`views` 
+FROM `eminent-cache-330114`.`matillion`.`cascada`))))))) 
+GROUP BY `data_date_key`, 
+         `platform_name`, 
+         `brand_name`, 
+         `us_vs_intl`)
+) r
+full join (select
+data_date_key,
+platform_name,
+brand_name,
+us_v_intl,
+avg(impressions) as impressions,
+avg(requests) as requests,
+avg(tmb_programmatic_revenue) as tmb_programmatic_revenue,
+avg(tmb_direct_revenue) as tmb_direct_revenue,
+avg(fuse_programmatic_revenue) as fuse_programmatic_revenue,
+avg(fuse_direct_revenue) as fuse_direct_revenue
+from
+(
+select
+data_date_key,
+platform_name,
+brand_name,
+us_v_intl,
+sum(impressions) as impressions,
+sum(requests) as requests,
+sum(tmb_programmatic_revenue) as tmb_programmatic_revenue,
+sum(tmb_direct_revenue) as tmb_direct_revenue,
+sum(fuse_programmatic_revenue) as fuse_programmatic_revenue,
+sum(fuse_direct_revenue) as fuse_direct_revenue
+from
+(
+select 
+date as data_date_key,
+supply_tag_name,
+platform,
+case when platform = 'Android' then concat('Android App ', us_v_intl)
+when platform = 'AndroidTV' then concat('AndroidTV App ', us_v_intl)
+when platform = 'AppleTV' then concat('tvOS App ', us_v_intl)
+when platform = 'Fetch' then 'FetchTV'
+when platform = 'FireTV' then concat('FireTV App ', us_v_intl)
+when platform = 'FuboTV' then concat('FuboTV ', us_v_intl)
+when platform = 'FreeView' then concat('Freeview ', us_v_intl)
+when platform = 'LG' then concat('LG ', us_v_intl)
+when platform = 'Plex' then concat('Plex ', us_v_intl)
+when platform = 'Pluto' then concat('Pluto ', us_v_intl)
+when platform = 'Roku' then concat('Roku App ', us_v_intl)
+when platform = 'Vidaa' then concat('Vidaa ', us_v_intl)
+when platform = 'Web' then concat('Web App ', us_v_intl)
+when lower(platform) like '%vizio%app%' then concat('Vizio App ', us_v_intl)
+when lower(platform) in ('xumo','whaletv+','tivify','directtv','fetch') then platform
+when platform = 'Anoki' then 'Anoki'
+when lower(platform) = 'samsungother' then concat('Samsung Other ',us_v_intl)
+when lower(platform) in ('samsungapp','samsung apps linear') then concat('Samsung App ',us_v_intl)
+when lower(platform) = 'samsungtvmobile' then concat('Samsung TV Mobile ',us_v_intl)
+when platform = 'iOS' then concat('iOS App ',us_v_intl)
+--else concat(platform,' ',us_v_intl,'*')
+else concat(platform,' ',us_v_intl)
+end as platform_name,
+brand,
+case when lower(brand) like '%fail%' then 'FailArmy'
+when lower(brand) like '%people%' then 'People Are Awesome'
+when lower(brand) like '%taste%' or lower(brand) like '%readers%'
+or lower(brand) like '%taste%' then 'False'
+when lower(brand) like '%pet%' then 'The Pet Collective'
+when lower(brand) like '%athom%' then 'At Home'
+when lower(brand) like '%weat%' then 'WeatherSpy'
+else 'False'
+end as brand_name,
+case when lower(platform) in ('xumo','whaletv+','tivify','directtv','fetch') then 'Unassigned'
+else us_v_intl
+end as us_v_intl,
+impressions,
+requests,
+tmb_programmatic_revenue,
+tmb_direct_revenue,
+fuse_programmatic_revenue,
+fuse_direct_revenue
+from (SELECT 
+  `springserve_fuse_reconciled`.`date`, 
+  `springserve_fuse_reconciled`.`supply_tag_name`, 
+  `springserve_fuse_reconciled`.`platform`, 
+  `springserve_fuse_reconciled`.`brand`, 
+  `springserve_fuse_reconciled`.`demand_tag_name`, 
+  `springserve_fuse_reconciled`.`demand_partner_name`, 
+  `springserve_fuse_reconciled`.`country`, 
+  `springserve_fuse_reconciled`.`us_v_intl`, 
+  `springserve_fuse_reconciled`.`impressions`, 
+  `springserve_fuse_reconciled`.`requests`, 
+  `springserve_fuse_reconciled`.`tmb_programmatic_revenue`, 
+  `springserve_fuse_reconciled`.`tmb_direct_revenue`, 
+  `springserve_fuse_reconciled`.`fuse_programmatic_revenue`, 
+  `springserve_fuse_reconciled`.`fuse_direct_revenue` 
+FROM `tmbi-310016`.`streaming`.`springserve_fuse_reconciled`)
+where platform is not null
+and platform not in ('#N/A','At Home with Family Handyman',
+'People Are Awesome','The Pet Collective','Weatherspy')
+and brand is not null
+)
+group by all
+)
+group by all
+) s
+on r.data_date_key = s.data_date_key 
+and r.platform_name = s.platform_name
+and r.brand_name = s.brand_name
+)))) 
+WHERE (`indirect_filter` = 0)))) 
+UNION ALL 
+(SELECT 
+   CAST(NULL AS DATE) AS `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   CAST(NULL AS STRING) AS `us_vs_intl`, 
+   CAST(NULL AS FLOAT64) AS `minutes`, 
+   CAST(NULL AS FLOAT64) AS `tmb_programmatic_revenue`, 
+   CAST(NULL AS FLOAT64) AS `tmb_direct_revenue`, 
+   CAST(NULL AS FLOAT64) AS `fuse_programmatic_revenue`, 
+   CAST(NULL AS FLOAT64) AS `fuse_direct_revenue`, 
+   CAST(NULL AS FLOAT64) AS `impressions`, 
+   CAST(NULL AS FLOAT64) AS `requests`, 
+   CAST(NULL AS STRING) AS `platform_name_2`, 
+   CAST(NULL AS INT64) AS `indirect_filter`, 
+   CAST(`month` AS STRING) AS `month`, 
+   CAST(NULL AS INT64) AS `year`, 
+   CAST(NULL AS INT64) AS `is_dual`, 
+   `month_int`, 
+   `year_int`, 
+   `sum_indirect_revenue`, 
+   `filter`, 
+   `indirect_revenue`, 
+   `month_key`, 
+   CAST(NULL AS FLOAT64) AS `minutes_ratio` 
+ FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `platform_name`, 
+  `brand_name`, 
+  `month_int`, 
+  `year_int`, 
+  `month`, 
+  `sum_indirect_revenue`, 
+  case 
+-- when lower(platform_name) not in ('amazon fire', 'comcast', 'crackle',
+--                                    'googletv', 'imdbtv (freevee)','local now',
+--                                    'nbcu peacock','popcorn','seven','sling','twitch')
+--                                    then 1
+when lower(platform_name) not in ('') then 1
+else 0
+end
+AS `filter`, 
+  `sum_indirect_revenue`
+AS `indirect_revenue`, 
+  month
+AS `month_key` 
+FROM ((SELECT 
+  `platform_name`, 
+  `brand_name`, 
+  `month_int`, 
+  `year_int`, 
+  `month`, 
+  SUM(`indirect_revenue`) AS `sum_indirect_revenue` 
+FROM ((SELECT 
+  `month`, 
+  case
+when lower(platform_name) = 'amazon fire' then 'Amazon Fire'
+when platform_name = 'Comcast:Xumo Comcast RevShare-LOV' then 'Comcast'
+when platform_name = 'Comcast:Xumo GoogleTV' then 'GoogleTV'
+when platform_name = 'Comcast:Xumo LG' then 'LG'
+when platform_name = 'Comcast:Xumo Redbox RevSh-LOV' then 'Redbox'
+when platform_name = 'Comcast:Xumo RevShare-LOV' then 'Xumo'
+when platform_name = 'Comcast:Xumo Tivo RevSh-LOV' then 'Tivo'
+when platform_name = 'Comcast:Xumo VIDAA RevSh-LOV' then 'Vidaa'
+when platform_name = 'Comcast:Xumo Xfinity RevSh-LOV' then 'Xfinity'
+when platform_name = 'Crackle:Crackle RevSh-LOV' then 'Crackle'
+when platform_name = 'IMDbTV (Freevee)' then 'Freevee (Int + US)'
+when platform_name = 'Freevee Intl' or platform_name = "IMDbTV (Freevee) Int'"
+then 'Freevee International'
+when platform_name = 'Freevee US' or platform_name = 'IMDbTV (Freevee) US'
+then 'Freevee US'
+when platform_name = 'Joyn RevSh-LOV-EUR' then 'Joyn'
+when platform_name = 'NBC LX' then 'NBCLX'
+when platform_name = 'NBC Universal, Inc.:NBCLX-LNVD' then 'NBCLX'
+when platform_name = 'NBC Universal, Inc.:Peacock LNVD' then 'Peacock'
+when platform_name = 'Plex RevSh-LOV' then 'Plex'
+when platform_name = 'Rakuten TV-EUR' then 'Rakuten'
+when platform_name = 'Roku-TRC-RevShare' then 'The Roku Channel'
+when lower(platform_name) like '%seven%' then 'Seven'
+when platform_name = 'Sinclair Broadcast Group:Stirr RevSh-LOV' then 'Stirr'
+when lower(platform_name) like '%sling%' then 'Sling'
+when platform_name = 'Twitch Interactive, Inc:Twitch LNVD' then 'Twitch'
+when platform_name = 'Viacom Media Networks: Pluto CA' then 'Pluto International'
+when platform_name = 'Viacom Media Networks:Pluto LNVD' then 'Pluto US'
+when platform_name = 'Viacom Media Networks:Pluto LNVD EU' then 'Pluto International'
+when platform_name = 'Viacom Media Networks:Pluto LNVD LATAM' then 'Pluto International'
+
+--when lower(platform_name) = 'freevee intl' then 'Freevee International'
+when lower(platform_name) like '%pluto %' and (lower(platform_name) like '% lat%'
+or lower(platform_name) like '% eu%' or lower(platform_name) like '% can%') then 'Pluto International'
+when lower(platform_name) = 'pluto' then 'Pluto US'
+when lower(platform_name) like '%stir%' then 'Stirr'
+when lower(platform_name) like '%sling%' then 'Sling'
+when lower(platform_name) like '%seve%' then 'Seven'
+when lower(platform_name) = 'trc' then 'The Roku Channel'
+when lower(platform_name) like '%vid%' then 'Vidaa'
+when lower(platform_name) like '%viz%' then 'Vizio'
+when lower(platform_name) like '%peacoc%' then 'Peacock'
+when lower(platform_name) like '%popcorn%' then 'PopcornFlix' --uniting popcorn and popcornflix as popcornflix
+when lower(platform_name) like '%trc%' then 'The Roku Channel'
+else trim(platform_name)
+end
+AS `platform_name`, 
+  case 
+when brand_name = 'FHM' then 'At Home'
+when brand_name like '%FA%' then 'FailArmy'
+when brand_name = 'PAA' then 'People Are Awesome'
+when lower(brand_name) like '%this %' or brand_name = 'TIH' then 'This Is Happening'
+when brand_name = 'TPC' then 'The Pet Collective'
+when brand_name = 'ToH' then 'Taste of Home'
+when brand_name = 'WS' then 'WeatherSpy'
+else trim(brand_name)
+end
+AS `brand_name`, 
+  `indirect_revenue`, 
+  `platform_name_source`, 
+  extract(month from month)
+AS `month_int`, 
+  extract(year from month)
+AS `year_int`, 
+  'Undefined'
+AS `country`, 
+  'Undefined'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `month`, 
+  `platform` AS `platform_name`, 
+  `brand` AS `brand_name`, 
+  `indirect_revenue`, 
+  `platform` AS `platform_name_source` 
+FROM ((SELECT 
+  `f_indirect_revenue`.`month`, 
+  `f_indirect_revenue`.`platform`, 
+  `f_indirect_revenue`.`brand`, 
+  `f_indirect_revenue`.`indirect_revenue` 
+FROM `phonic-presence-327612`.`linear`.`f_indirect_revenue`)))) 
+WHERE (NOT(`brand_name` = 'Jukin Media') 
+      AND NOT(`brand_name` = 'Jukin Media (MRSS)') 
+      AND NOT(`brand_name` = 'Jukin Video') 
+      AND NOT(`brand_name` = 'JukinVideo') 
+      AND NOT(`brand_name` = 'RON')))))) 
+GROUP BY `platform_name`, 
+         `brand_name`, 
+         `month_int`, 
+         `year_int`, 
+         `month`)))) 
+WHERE (`filter` = 0)))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `us_vs_intl`, 
+   `minutes`, 
+   `tmb_programmatic_revenue`, 
+   `tmb_direct_revenue`, 
+   `fuse_programmatic_revenue`, 
+   `fuse_direct_revenue`, 
+   `impressions`, 
+   `requests`, 
+   CAST(NULL AS STRING) AS `platform_name_2`, 
+   CAST(NULL AS INT64) AS `indirect_filter`, 
+   CAST(NULL AS STRING) AS `month`, 
+   CAST(NULL AS INT64) AS `year`, 
+   CAST(NULL AS INT64) AS `is_dual`, 
+   CAST(NULL AS INT64) AS `month_int`, 
+   CAST(NULL AS INT64) AS `year_int`, 
+   CAST(NULL AS FLOAT64) AS `sum_indirect_revenue`, 
+   CAST(NULL AS INT64) AS `filter`, 
+   `indirect_revenue`, 
+   CAST(NULL AS DATE) AS `month_key`, 
+   `minutes_ratio` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  `minutes_ratio`, 
+  `us_vs_intl`, 
+  `tmb_programmatic_revenue`, 
+  `tmb_direct_revenue`, 
+  `fuse_programmatic_revenue`, 
+  `fuse_direct_revenue`, 
+  coalesce(indirect_revenue,0)*coalesce(minutes_ratio,0)
+AS `indirect_revenue`, 
+  `requests`, 
+  `impressions` 
+FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `a`.`data_date_key` AS `data_date_key`, 
+  `a`.`platform_name` AS `platform_name`, 
+  `a`.`brand_name` AS `brand_name`, 
+  `a`.`minutes` AS `minutes`, 
+  `a`.`minutes_ratio` AS `minutes_ratio`, 
+  `a`.`us_vs_intl` AS `us_vs_intl`, 
+  `a`.`tmb_programmatic_revenue` AS `tmb_programmatic_revenue`, 
+  `a`.`tmb_direct_revenue` AS `tmb_direct_revenue`, 
+  `a`.`fuse_programmatic_revenue` AS `fuse_programmatic_revenue`, 
+  `a`.`fuse_direct_revenue` AS `fuse_direct_revenue`, 
+  `b`.`sum_indirect_revenue` AS `indirect_revenue`, 
+  `a`.`requests` AS `requests`, 
+  `a`.`impressions` AS `impressions` 
+FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  `monthly_minutes`, 
+  `month`, 
+  `year`, 
+  `platform_name_2`, 
+  `us_vs_intl`, 
+  coalesce(tmb_programmatic_revenue,0)
+AS `tmb_programmatic_revenue`, 
+  `tmb_direct_revenue`, 
+  `fuse_programmatic_revenue`, 
+  `fuse_direct_revenue`, 
+  `requests`, 
+  `impressions`, 
+  `country`, 
+  safe_divide(minutes,monthly_minutes)
+AS `minutes_ratio` 
+FROM (((SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `minutes`, 
+   `monthly_minutes`, 
+   `month`, 
+   `year`, 
+   `platform_name_2`, 
+   `us_vs_intl`, 
+   `tmb_programmatic_revenue`, 
+   `tmb_direct_revenue`, 
+   `fuse_programmatic_revenue`, 
+   `fuse_direct_revenue`, 
+   `requests`, 
+   `impressions`, 
+   CAST(NULL AS STRING) AS `country` 
+ FROM ((SELECT 
+  `a`.`data_date_key` AS `data_date_key`, 
+  `a`.`platform_name` AS `platform_name`, 
+  `a`.`brand_name` AS `brand_name`, 
+  `a`.`minutes` AS `minutes`, 
+  `b`.`sum_minutes` AS `monthly_minutes`, 
+  `a`.`month` AS `month`, 
+  `a`.`year` AS `year`, 
+  `a`.`platform_name_2` AS `platform_name_2`, 
+  `a`.`us_vs_intl` AS `us_vs_intl`, 
+  `a`.`tmb_programmatic_revenue` AS `tmb_programmatic_revenue`, 
+  `a`.`tmb_direct_revenue` AS `tmb_direct_revenue`, 
+  `a`.`fuse_programmatic_revenue` AS `fuse_programmatic_revenue`, 
+  `a`.`fuse_direct_revenue` AS `fuse_direct_revenue`, 
+  `a`.`requests` AS `requests`, 
+  `a`.`impressions` AS `impressions` 
+FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `us_vs_intl`, 
+  `minutes`, 
+  `tmb_programmatic_revenue`, 
+  `tmb_direct_revenue`, 
+  `fuse_programmatic_revenue`, 
+  `fuse_direct_revenue`, 
+  `impressions`, 
+  `requests`, 
+  case when lower(platform_name) like '%lg%' then 'LG'
+when lower(platform_name) like '%plex%' then 'Plex'
+when lower(platform_name) like '%raku%' then 'Rakuten'
+when lower(platform_name) like '%vid%' then 'Vidaa'
+when lower(platform_name) like '%viz%' then 'Vizio'
+else platform_name
+end
+AS `platform_name_2`, 
+  case when lower(platform_name) like '%lg%' then 1
+when lower(platform_name) like '%plex%' then 1
+when lower(platform_name) like '%raku%' then 1
+when lower(platform_name) like '%vid%' then 1
+when lower(platform_name) like '%vizi%' then 1
+when lower(platform_name) in ('tivify','tivo','joyn','stirr') then 1
+when lower(platform_name) like '%plut%' then 1
+else 0
+end
+AS `indirect_filter`, 
+  extract(month from data_date_key)
+
+AS `month`, 
+  extract(year from data_date_key)
+AS `year`, 
+  case when lower(platform_name) like '%lg%' then 1
+when lower(platform_name) like '%plex%' then 1
+when lower(platform_name) like '%raku%' then 1
+when lower(platform_name) like '%vid%' then 1
+when lower(platform_name) like '%vizi%' then 1
+when lower(platform_name) in ('tivify','tivo','joyn','stirr') then 1
+when lower(platform_name) like '%plut%' then 1
+else 0
+end
+AS `is_dual` 
+FROM ((select coalesce(r.data_date_key, s.data_date_key) as data_date_key
+	,coalesce(r.platform_name, s.platform_name) as platform_name
+    ,coalesce(r.brand_name, s.brand_name) as brand_name
+    ,coalesce(r.us_vs_intl,s.us_v_intl) as us_vs_intl
+    ,r.minutes
+    ,s.tmb_programmatic_revenue
+    ,s.tmb_direct_revenue
+    ,s.fuse_programmatic_revenue
+    ,s.fuse_direct_revenue
+    ,s.impressions
+    ,s.requests
+
+from (select 
+data_date_key,
+platform_name,
+brand_name,
+case when us_vs_intl is null and platform_name like '% US%' then 'US'
+when us_vs_intl is null and platform_name like '% Inter%' then 'International'
+when us_vs_intl is null and (platform_name not like '% US%' or platform_name not like '% Inter%') then 'Unassigned'
+else us_vs_intl end as us_vs_intl,
+sum_minutes as minutes,
+sum_views as views,
+sum_users as users,
+sum_sessions as sessions
+from (SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `us_vs_intl`, 
+  SUM(`minutes`) AS `sum_minutes`, 
+  SUM(`views`) AS `sum_views`, 
+  SUM(`users`) AS `sum_users`, 
+  SUM(`sessions`) AS `sum_sessions` 
+FROM (((SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(`views` AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name, " ", us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_intl`, 
+  `views`, 
+  `minutes`, 
+  'plex'
+AS `source` 
+FROM ((SELECT 
+  `plex_direct`.`data_date_key`, 
+  `plex_direct`.`platform_name`, 
+  `plex_direct`.`brand_name`, 
+  `plex_direct`.`country`, 
+  `plex_direct`.`us_vs_intl`, 
+  `plex_direct`.`views`, 
+  `plex_direct`.`minutes` 
+FROM `eminent-cache-330114`.`matillion`.`plex_direct`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(NULL AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name," ",us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  `country`, 
+  `us_vs_intl`, 
+  'pluto'
+AS `source` 
+FROM ((SELECT 
+  `pluto`.`data_date_key`, 
+  `pluto`.`platform_name`, 
+  `pluto`.`brand_name`, 
+  `pluto`.`minutes`, 
+  `pluto`.`country`, 
+  `pluto`.`us_vs_intl` 
+FROM `eminent-cache-330114`.`matillion`.`pluto`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   CAST(NULL AS STRING) AS `us_vs_intl`, 
+   CAST(NULL AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   `us_vs_international`, 
+   `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `data_date_key`, 
+  case 
+when country != 'Unassigned' then concat(platform_name," ",us_vs_international)
+else platform_name
+end
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_international`, 
+  `minutes`, 
+  'manual'
+AS `source`, 
+  case
+when platform_name in ('Amazon Fire','DirecTV App','Freevee','GoogleTV','Seven','The Roku Channel','Twitch') then 1
+else 0
+end
+AS `rev_filter` 
+FROM ((SELECT 
+  `manual_platforms`.`data_date_key`, 
+  `manual_platforms`.`platform_name`, 
+  `manual_platforms`.`brand_name`, 
+  `manual_platforms`.`country`, 
+  `manual_platforms`.`us_vs_international`, 
+  `manual_platforms`.`minutes` 
+FROM `phonic-presence-327612`.`matillion`.`manual_platforms`)))) 
+WHERE (`rev_filter` = 0)))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   CAST(NULL AS STRING) AS `country`, 
+   `us_vs_intl`, 
+   CAST(NULL AS NUMERIC) AS `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  'frequency'
+AS `source`, 
+  'Unassigned'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  `frequency`.`data_date_key`, 
+  `frequency`.`platform_name`, 
+  `frequency`.`brand_name`, 
+  `frequency`.`minutes` 
+FROM `eminent-cache-330114`.`matillion`.`frequency`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   CAST(NULL AS STRING) AS `us_vs_intl`, 
+   `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  'Freeview International'
+AS `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  `views`, 
+  'freeview uk'
+AS `source`, 
+  'UK'
+AS `country` 
+FROM ((SELECT 
+  `freeview_uk`.`data_date_key`, 
+  `freeview_uk`.`platform_name`, 
+  `freeview_uk`.`brand_name`, 
+  `freeview_uk`.`minutes`, 
+  `freeview_uk`.`views` 
+FROM `phonic-presence-327612`.`matillion`.`freeview_uk`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(`views` AS NUMERIC) AS `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `views`, 
+  `minutes`, 
+  'xumo'
+AS `source`, 
+  'Unassigned'
+AS `country`, 
+  'Unassigned'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  `xumo`.`data_date_key`, 
+  `xumo`.`platform_name`, 
+  `xumo`.`brand_name`, 
+  `xumo`.`views`, 
+  `xumo`.`minutes` 
+FROM `eminent-cache-330114`.`matillion`.`xumo`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(`views` AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name," ",us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_intl`, 
+  `minutes`, 
+  `views`, 
+  `users`, 
+  'ottera'
+AS `source` 
+FROM ((SELECT 
+  `ottera`.`data_date_key`, 
+  `ottera`.`platform_name`, 
+  `ottera`.`brand_name`, 
+  `ottera`.`country`, 
+  `ottera`.`us_vs_intl`, 
+  `ottera`.`minutes`, 
+  `ottera`.`views`, 
+  `ottera`.`users` 
+FROM `eminent-cache-330114`.`matillion`.`ottera`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(NULL AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   `users`, 
+   `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name," ",us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_intl`, 
+  `users`, 
+  `minutes`, 
+  `sessions`, 
+  'wurl'
+AS `source` 
+FROM ((SELECT 
+  `wurl`.`data_date_key`, 
+  `wurl`.`platform_name`, 
+  `wurl`.`brand_name`, 
+  `wurl`.`country`, 
+  `wurl`.`us_vs_intl`, 
+  `wurl`.`users`, 
+  `wurl`.`minutes`, 
+  `wurl`.`sessions` 
+FROM `eminent-cache-330114`.`matillion`.`wurl`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(`views` AS NUMERIC) AS `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name," ",us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_intl`, 
+  `minutes`, 
+  `views`, 
+  'cascada'
+AS `source` 
+FROM ((SELECT 
+  `cascada`.`data_date_key`, 
+  `cascada`.`platform_name`, 
+  `cascada`.`brand_name`, 
+  `cascada`.`country`, 
+  `cascada`.`us_vs_intl`, 
+  `cascada`.`minutes`, 
+  `cascada`.`views` 
+FROM `eminent-cache-330114`.`matillion`.`cascada`))))))) 
+GROUP BY `data_date_key`, 
+         `platform_name`, 
+         `brand_name`, 
+         `us_vs_intl`)
+) r
+full join (select
+data_date_key,
+platform_name,
+brand_name,
+us_v_intl,
+avg(impressions) as impressions,
+avg(requests) as requests,
+avg(tmb_programmatic_revenue) as tmb_programmatic_revenue,
+avg(tmb_direct_revenue) as tmb_direct_revenue,
+avg(fuse_programmatic_revenue) as fuse_programmatic_revenue,
+avg(fuse_direct_revenue) as fuse_direct_revenue
+from
+(
+select
+data_date_key,
+platform_name,
+brand_name,
+us_v_intl,
+sum(impressions) as impressions,
+sum(requests) as requests,
+sum(tmb_programmatic_revenue) as tmb_programmatic_revenue,
+sum(tmb_direct_revenue) as tmb_direct_revenue,
+sum(fuse_programmatic_revenue) as fuse_programmatic_revenue,
+sum(fuse_direct_revenue) as fuse_direct_revenue
+from
+(
+select 
+date as data_date_key,
+supply_tag_name,
+platform,
+case when platform = 'Android' then concat('Android App ', us_v_intl)
+when platform = 'AndroidTV' then concat('AndroidTV App ', us_v_intl)
+when platform = 'AppleTV' then concat('tvOS App ', us_v_intl)
+when platform = 'Fetch' then 'FetchTV'
+when platform = 'FireTV' then concat('FireTV App ', us_v_intl)
+when platform = 'FuboTV' then concat('FuboTV ', us_v_intl)
+when platform = 'FreeView' then concat('Freeview ', us_v_intl)
+when platform = 'LG' then concat('LG ', us_v_intl)
+when platform = 'Plex' then concat('Plex ', us_v_intl)
+when platform = 'Pluto' then concat('Pluto ', us_v_intl)
+when platform = 'Roku' then concat('Roku App ', us_v_intl)
+when platform = 'Vidaa' then concat('Vidaa ', us_v_intl)
+when platform = 'Web' then concat('Web App ', us_v_intl)
+when lower(platform) like '%vizio%app%' then concat('Vizio App ', us_v_intl)
+when lower(platform) in ('xumo','whaletv+','tivify','directtv','fetch') then platform
+when platform = 'Anoki' then 'Anoki'
+when lower(platform) = 'samsungother' then concat('Samsung Other ',us_v_intl)
+when lower(platform) in ('samsungapp','samsung apps linear') then concat('Samsung App ',us_v_intl)
+when lower(platform) = 'samsungtvmobile' then concat('Samsung TV Mobile ',us_v_intl)
+when platform = 'iOS' then concat('iOS App ',us_v_intl)
+--else concat(platform,' ',us_v_intl,'*')
+else concat(platform,' ',us_v_intl)
+end as platform_name,
+brand,
+case when lower(brand) like '%fail%' then 'FailArmy'
+when lower(brand) like '%people%' then 'People Are Awesome'
+when lower(brand) like '%taste%' or lower(brand) like '%readers%'
+or lower(brand) like '%taste%' then 'False'
+when lower(brand) like '%pet%' then 'The Pet Collective'
+when lower(brand) like '%athom%' then 'At Home'
+when lower(brand) like '%weat%' then 'WeatherSpy'
+else 'False'
+end as brand_name,
+case when lower(platform) in ('xumo','whaletv+','tivify','directtv','fetch') then 'Unassigned'
+else us_v_intl
+end as us_v_intl,
+impressions,
+requests,
+tmb_programmatic_revenue,
+tmb_direct_revenue,
+fuse_programmatic_revenue,
+fuse_direct_revenue
+from (SELECT 
+  `springserve_fuse_reconciled`.`date`, 
+  `springserve_fuse_reconciled`.`supply_tag_name`, 
+  `springserve_fuse_reconciled`.`platform`, 
+  `springserve_fuse_reconciled`.`brand`, 
+  `springserve_fuse_reconciled`.`demand_tag_name`, 
+  `springserve_fuse_reconciled`.`demand_partner_name`, 
+  `springserve_fuse_reconciled`.`country`, 
+  `springserve_fuse_reconciled`.`us_v_intl`, 
+  `springserve_fuse_reconciled`.`impressions`, 
+  `springserve_fuse_reconciled`.`requests`, 
+  `springserve_fuse_reconciled`.`tmb_programmatic_revenue`, 
+  `springserve_fuse_reconciled`.`tmb_direct_revenue`, 
+  `springserve_fuse_reconciled`.`fuse_programmatic_revenue`, 
+  `springserve_fuse_reconciled`.`fuse_direct_revenue` 
+FROM `tmbi-310016`.`streaming`.`springserve_fuse_reconciled`)
+where platform is not null
+and platform not in ('#N/A','At Home with Family Handyman',
+'People Are Awesome','The Pet Collective','Weatherspy')
+and brand is not null
+)
+group by all
+)
+group by all
+) s
+on r.data_date_key = s.data_date_key 
+and r.platform_name = s.platform_name
+and r.brand_name = s.brand_name
+)))) 
+WHERE (`indirect_filter` = 1))) AS `a` 
+     LEFT OUTER JOIN 
+     ((SELECT 
+  `platform_name_2`, 
+  `brand_name`, 
+  `month`, 
+  `year`, 
+  SUM(`minutes`) AS `sum_minutes` 
+FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `us_vs_intl`, 
+  `minutes`, 
+  `tmb_programmatic_revenue`, 
+  `tmb_direct_revenue`, 
+  `fuse_programmatic_revenue`, 
+  `fuse_direct_revenue`, 
+  `impressions`, 
+  `requests`, 
+  case when lower(platform_name) like '%lg%' then 'LG'
+when lower(platform_name) like '%plex%' then 'Plex'
+when lower(platform_name) like '%raku%' then 'Rakuten'
+when lower(platform_name) like '%vid%' then 'Vidaa'
+when lower(platform_name) like '%viz%' then 'Vizio'
+else platform_name
+end
+AS `platform_name_2`, 
+  case when lower(platform_name) like '%lg%' then 1
+when lower(platform_name) like '%plex%' then 1
+when lower(platform_name) like '%raku%' then 1
+when lower(platform_name) like '%vid%' then 1
+when lower(platform_name) like '%vizi%' then 1
+when lower(platform_name) in ('tivify','tivo','joyn','stirr') then 1
+when lower(platform_name) like '%plut%' then 1
+else 0
+end
+AS `indirect_filter`, 
+  extract(month from data_date_key)
+
+AS `month`, 
+  extract(year from data_date_key)
+AS `year`, 
+  case when lower(platform_name) like '%lg%' then 1
+when lower(platform_name) like '%plex%' then 1
+when lower(platform_name) like '%raku%' then 1
+when lower(platform_name) like '%vid%' then 1
+when lower(platform_name) like '%vizi%' then 1
+when lower(platform_name) in ('tivify','tivo','joyn','stirr') then 1
+when lower(platform_name) like '%plut%' then 1
+else 0
+end
+AS `is_dual` 
+FROM ((select coalesce(r.data_date_key, s.data_date_key) as data_date_key
+	,coalesce(r.platform_name, s.platform_name) as platform_name
+    ,coalesce(r.brand_name, s.brand_name) as brand_name
+    ,coalesce(r.us_vs_intl,s.us_v_intl) as us_vs_intl
+    ,r.minutes
+    ,s.tmb_programmatic_revenue
+    ,s.tmb_direct_revenue
+    ,s.fuse_programmatic_revenue
+    ,s.fuse_direct_revenue
+    ,s.impressions
+    ,s.requests
+
+from (select 
+data_date_key,
+platform_name,
+brand_name,
+case when us_vs_intl is null and platform_name like '% US%' then 'US'
+when us_vs_intl is null and platform_name like '% Inter%' then 'International'
+when us_vs_intl is null and (platform_name not like '% US%' or platform_name not like '% Inter%') then 'Unassigned'
+else us_vs_intl end as us_vs_intl,
+sum_minutes as minutes,
+sum_views as views,
+sum_users as users,
+sum_sessions as sessions
+from (SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `us_vs_intl`, 
+  SUM(`minutes`) AS `sum_minutes`, 
+  SUM(`views`) AS `sum_views`, 
+  SUM(`users`) AS `sum_users`, 
+  SUM(`sessions`) AS `sum_sessions` 
+FROM (((SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(`views` AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name, " ", us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_intl`, 
+  `views`, 
+  `minutes`, 
+  'plex'
+AS `source` 
+FROM ((SELECT 
+  `plex_direct`.`data_date_key`, 
+  `plex_direct`.`platform_name`, 
+  `plex_direct`.`brand_name`, 
+  `plex_direct`.`country`, 
+  `plex_direct`.`us_vs_intl`, 
+  `plex_direct`.`views`, 
+  `plex_direct`.`minutes` 
+FROM `eminent-cache-330114`.`matillion`.`plex_direct`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(NULL AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name," ",us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  `country`, 
+  `us_vs_intl`, 
+  'pluto'
+AS `source` 
+FROM ((SELECT 
+  `pluto`.`data_date_key`, 
+  `pluto`.`platform_name`, 
+  `pluto`.`brand_name`, 
+  `pluto`.`minutes`, 
+  `pluto`.`country`, 
+  `pluto`.`us_vs_intl` 
+FROM `eminent-cache-330114`.`matillion`.`pluto`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   CAST(NULL AS STRING) AS `us_vs_intl`, 
+   CAST(NULL AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   `us_vs_international`, 
+   `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `data_date_key`, 
+  case 
+when country != 'Unassigned' then concat(platform_name," ",us_vs_international)
+else platform_name
+end
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_international`, 
+  `minutes`, 
+  'manual'
+AS `source`, 
+  case
+when platform_name in ('Amazon Fire','DirecTV App','Freevee','GoogleTV','Seven','The Roku Channel','Twitch') then 1
+else 0
+end
+AS `rev_filter` 
+FROM ((SELECT 
+  `manual_platforms`.`data_date_key`, 
+  `manual_platforms`.`platform_name`, 
+  `manual_platforms`.`brand_name`, 
+  `manual_platforms`.`country`, 
+  `manual_platforms`.`us_vs_international`, 
+  `manual_platforms`.`minutes` 
+FROM `phonic-presence-327612`.`matillion`.`manual_platforms`)))) 
+WHERE (`rev_filter` = 0)))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   CAST(NULL AS STRING) AS `country`, 
+   `us_vs_intl`, 
+   CAST(NULL AS NUMERIC) AS `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  'frequency'
+AS `source`, 
+  'Unassigned'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  `frequency`.`data_date_key`, 
+  `frequency`.`platform_name`, 
+  `frequency`.`brand_name`, 
+  `frequency`.`minutes` 
+FROM `eminent-cache-330114`.`matillion`.`frequency`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   CAST(NULL AS STRING) AS `us_vs_intl`, 
+   `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  'Freeview International'
+AS `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  `views`, 
+  'freeview uk'
+AS `source`, 
+  'UK'
+AS `country` 
+FROM ((SELECT 
+  `freeview_uk`.`data_date_key`, 
+  `freeview_uk`.`platform_name`, 
+  `freeview_uk`.`brand_name`, 
+  `freeview_uk`.`minutes`, 
+  `freeview_uk`.`views` 
+FROM `phonic-presence-327612`.`matillion`.`freeview_uk`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(`views` AS NUMERIC) AS `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `views`, 
+  `minutes`, 
+  'xumo'
+AS `source`, 
+  'Unassigned'
+AS `country`, 
+  'Unassigned'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  `xumo`.`data_date_key`, 
+  `xumo`.`platform_name`, 
+  `xumo`.`brand_name`, 
+  `xumo`.`views`, 
+  `xumo`.`minutes` 
+FROM `eminent-cache-330114`.`matillion`.`xumo`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(`views` AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name," ",us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_intl`, 
+  `minutes`, 
+  `views`, 
+  `users`, 
+  'ottera'
+AS `source` 
+FROM ((SELECT 
+  `ottera`.`data_date_key`, 
+  `ottera`.`platform_name`, 
+  `ottera`.`brand_name`, 
+  `ottera`.`country`, 
+  `ottera`.`us_vs_intl`, 
+  `ottera`.`minutes`, 
+  `ottera`.`views`, 
+  `ottera`.`users` 
+FROM `eminent-cache-330114`.`matillion`.`ottera`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(NULL AS NUMERIC) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   `users`, 
+   `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name," ",us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_intl`, 
+  `users`, 
+  `minutes`, 
+  `sessions`, 
+  'wurl'
+AS `source` 
+FROM ((SELECT 
+  `wurl`.`data_date_key`, 
+  `wurl`.`platform_name`, 
+  `wurl`.`brand_name`, 
+  `wurl`.`country`, 
+  `wurl`.`us_vs_intl`, 
+  `wurl`.`users`, 
+  `wurl`.`minutes`, 
+  `wurl`.`sessions` 
+FROM `eminent-cache-330114`.`matillion`.`wurl`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `country`, 
+   `us_vs_intl`, 
+   CAST(`views` AS NUMERIC) AS `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter`, 
+   CAST(NULL AS INT64) AS `users`, 
+   CAST(NULL AS FLOAT64) AS `sessions` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  concat(platform_name," ",us_vs_intl)
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_intl`, 
+  `minutes`, 
+  `views`, 
+  'cascada'
+AS `source` 
+FROM ((SELECT 
+  `cascada`.`data_date_key`, 
+  `cascada`.`platform_name`, 
+  `cascada`.`brand_name`, 
+  `cascada`.`country`, 
+  `cascada`.`us_vs_intl`, 
+  `cascada`.`minutes`, 
+  `cascada`.`views` 
+FROM `eminent-cache-330114`.`matillion`.`cascada`))))))) 
+GROUP BY `data_date_key`, 
+         `platform_name`, 
+         `brand_name`, 
+         `us_vs_intl`)
+) r
+full join (select
+data_date_key,
+platform_name,
+brand_name,
+us_v_intl,
+avg(impressions) as impressions,
+avg(requests) as requests,
+avg(tmb_programmatic_revenue) as tmb_programmatic_revenue,
+avg(tmb_direct_revenue) as tmb_direct_revenue,
+avg(fuse_programmatic_revenue) as fuse_programmatic_revenue,
+avg(fuse_direct_revenue) as fuse_direct_revenue
+from
+(
+select
+data_date_key,
+platform_name,
+brand_name,
+us_v_intl,
+sum(impressions) as impressions,
+sum(requests) as requests,
+sum(tmb_programmatic_revenue) as tmb_programmatic_revenue,
+sum(tmb_direct_revenue) as tmb_direct_revenue,
+sum(fuse_programmatic_revenue) as fuse_programmatic_revenue,
+sum(fuse_direct_revenue) as fuse_direct_revenue
+from
+(
+select 
+date as data_date_key,
+supply_tag_name,
+platform,
+case when platform = 'Android' then concat('Android App ', us_v_intl)
+when platform = 'AndroidTV' then concat('AndroidTV App ', us_v_intl)
+when platform = 'AppleTV' then concat('tvOS App ', us_v_intl)
+when platform = 'Fetch' then 'FetchTV'
+when platform = 'FireTV' then concat('FireTV App ', us_v_intl)
+when platform = 'FuboTV' then concat('FuboTV ', us_v_intl)
+when platform = 'FreeView' then concat('Freeview ', us_v_intl)
+when platform = 'LG' then concat('LG ', us_v_intl)
+when platform = 'Plex' then concat('Plex ', us_v_intl)
+when platform = 'Pluto' then concat('Pluto ', us_v_intl)
+when platform = 'Roku' then concat('Roku App ', us_v_intl)
+when platform = 'Vidaa' then concat('Vidaa ', us_v_intl)
+when platform = 'Web' then concat('Web App ', us_v_intl)
+when lower(platform) like '%vizio%app%' then concat('Vizio App ', us_v_intl)
+when lower(platform) in ('xumo','whaletv+','tivify','directtv','fetch') then platform
+when platform = 'Anoki' then 'Anoki'
+when lower(platform) = 'samsungother' then concat('Samsung Other ',us_v_intl)
+when lower(platform) in ('samsungapp','samsung apps linear') then concat('Samsung App ',us_v_intl)
+when lower(platform) = 'samsungtvmobile' then concat('Samsung TV Mobile ',us_v_intl)
+when platform = 'iOS' then concat('iOS App ',us_v_intl)
+--else concat(platform,' ',us_v_intl,'*')
+else concat(platform,' ',us_v_intl)
+end as platform_name,
+brand,
+case when lower(brand) like '%fail%' then 'FailArmy'
+when lower(brand) like '%people%' then 'People Are Awesome'
+when lower(brand) like '%taste%' or lower(brand) like '%readers%'
+or lower(brand) like '%taste%' then 'False'
+when lower(brand) like '%pet%' then 'The Pet Collective'
+when lower(brand) like '%athom%' then 'At Home'
+when lower(brand) like '%weat%' then 'WeatherSpy'
+else 'False'
+end as brand_name,
+case when lower(platform) in ('xumo','whaletv+','tivify','directtv','fetch') then 'Unassigned'
+else us_v_intl
+end as us_v_intl,
+impressions,
+requests,
+tmb_programmatic_revenue,
+tmb_direct_revenue,
+fuse_programmatic_revenue,
+fuse_direct_revenue
+from (SELECT 
+  `springserve_fuse_reconciled`.`date`, 
+  `springserve_fuse_reconciled`.`supply_tag_name`, 
+  `springserve_fuse_reconciled`.`platform`, 
+  `springserve_fuse_reconciled`.`brand`, 
+  `springserve_fuse_reconciled`.`demand_tag_name`, 
+  `springserve_fuse_reconciled`.`demand_partner_name`, 
+  `springserve_fuse_reconciled`.`country`, 
+  `springserve_fuse_reconciled`.`us_v_intl`, 
+  `springserve_fuse_reconciled`.`impressions`, 
+  `springserve_fuse_reconciled`.`requests`, 
+  `springserve_fuse_reconciled`.`tmb_programmatic_revenue`, 
+  `springserve_fuse_reconciled`.`tmb_direct_revenue`, 
+  `springserve_fuse_reconciled`.`fuse_programmatic_revenue`, 
+  `springserve_fuse_reconciled`.`fuse_direct_revenue` 
+FROM `tmbi-310016`.`streaming`.`springserve_fuse_reconciled`)
+where platform is not null
+and platform not in ('#N/A','At Home with Family Handyman',
+'People Are Awesome','The Pet Collective','Weatherspy')
+and brand is not null
+)
+group by all
+)
+group by all
+) s
+on r.data_date_key = s.data_date_key 
+and r.platform_name = s.platform_name
+and r.brand_name = s.brand_name
+)))) 
+WHERE (`indirect_filter` = 1))) 
+GROUP BY `platform_name_2`, 
+         `brand_name`, 
+         `month`, 
+         `year`)) AS `b` 
+     ON `a`.`platform_name_2` = `b`.`platform_name_2`
+and
+`a`.`brand_name` = `b`.`brand_name`
+and 
+`a`.`month` = `b`.`month`
+and
+`a`.`year` = `b`.`year`))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `minutes`, 
+   `monthly_minutes`, 
+   `month`, 
+   `year`, 
+   `platform_name_2`, 
+   `us_vs_intl`, 
+   CAST(NULL AS FLOAT64) AS `tmb_programmatic_revenue`, 
+   CAST(NULL AS FLOAT64) AS `tmb_direct_revenue`, 
+   CAST(NULL AS FLOAT64) AS `fuse_programmatic_revenue`, 
+   CAST(NULL AS FLOAT64) AS `fuse_direct_revenue`, 
+   CAST(NULL AS FLOAT64) AS `requests`, 
+   CAST(NULL AS FLOAT64) AS `impressions`, 
+   `country` 
+ FROM ((SELECT 
+  `a`.`data_date_key` AS `data_date_key`, 
+  `a`.`platform_name` AS `platform_name`, 
+  `a`.`brand_name` AS `brand_name`, 
+  `a`.`minutes` AS `minutes`, 
+  `b`.`sum_minutes` AS `monthly_minutes`, 
+  `a`.`month` AS `month`, 
+  `a`.`year` AS `year`, 
+  `a`.`platform_name_2` AS `platform_name_2`, 
+  `a`.`country` AS `country`, 
+  `a`.`us_vs_intl` AS `us_vs_intl` 
+FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `views`, 
+  `minutes`, 
+  `source`, 
+  `us_vs_intl`, 
+  `country`, 
+  `us_vs_international`, 
+  `rev_filter`, 
+  extract(month from data_date_key)
+AS `month`, 
+  extract(year from data_date_key)
+AS `year`, 
+  `platform_name`
+AS `platform_name_2` 
+FROM (((SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `views`, 
+   `minutes`, 
+   `source`, 
+   `us_vs_intl`, 
+   CAST(NULL AS STRING) AS `country`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `views`, 
+  `minutes`, 
+  'The Roku Channel'
+AS `source`, 
+  'Unassigned'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  `the_roku_channel`.`data_date_key`, 
+  `the_roku_channel`.`platform_name`, 
+  `the_roku_channel`.`brand_name`, 
+  `the_roku_channel`.`views`, 
+  `the_roku_channel`.`minutes` 
+FROM `phonic-presence-327612`.`matillion`.`the_roku_channel`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   CAST(NULL AS INT64) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_intl`, 
+   `country`, 
+   `us_vs_international`, 
+   `rev_filter` 
+ FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `data_date_key`, 
+  case 
+when country != 'Unassigned' then concat(platform_name," ",us_vs_international)
+else platform_name
+end
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_international`, 
+  `minutes`, 
+  'manual'
+AS `source`, 
+  case
+when platform_name in ('Amazon Fire','DirecTV App','Freevee','GoogleTV','Seven','The Roku Channel','Twitch') then 1
+else 0
+end
+AS `rev_filter` 
+FROM ((SELECT 
+  `manual_platforms`.`data_date_key`, 
+  `manual_platforms`.`platform_name`, 
+  `manual_platforms`.`brand_name`, 
+  `manual_platforms`.`country`, 
+  `manual_platforms`.`us_vs_international`, 
+  `manual_platforms`.`minutes` 
+FROM `phonic-presence-327612`.`matillion`.`manual_platforms`)))) 
+WHERE (`rev_filter` = 1)))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   CAST(NULL AS INT64) AS `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   `us_vs_intl`, 
+   CAST(NULL AS STRING) AS `country`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter` 
+ FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  'frequency'
+AS `source`, 
+  'Unassigned'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  `frequency`.`data_date_key`, 
+  `frequency`.`platform_name`, 
+  `frequency`.`brand_name`, 
+  `frequency`.`minutes` 
+FROM `eminent-cache-330114`.`matillion`.`frequency`)))) 
+WHERE (`platform_name` = 'Joyn' 
+      OR `platform_name` = 'Stirr' 
+      OR `platform_name` = 'Vizio' 
+      OR `platform_name` = 'Tivo' 
+      OR `platform_name` = 'Tivify')))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   `us_vs_intl`, 
+   `country`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `views`, 
+  `minutes`, 
+  'xumo'
+AS `source`, 
+  'Unassigned'
+AS `country`, 
+  'Unassigned'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  `xumo`.`data_date_key`, 
+  `xumo`.`platform_name`, 
+  `xumo`.`brand_name`, 
+  `xumo`.`views`, 
+  `xumo`.`minutes` 
+FROM `eminent-cache-330114`.`matillion`.`xumo`))))))))) AS `a` 
+     LEFT OUTER JOIN 
+     ((SELECT 
+  `platform_name`, 
+  `brand_name`, 
+  `month`, 
+  `year`, 
+  SUM(`minutes`) AS `sum_minutes` 
+FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `views`, 
+  `minutes`, 
+  `source`, 
+  `us_vs_intl`, 
+  `country`, 
+  `us_vs_international`, 
+  `rev_filter`, 
+  extract(month from data_date_key)
+AS `month`, 
+  extract(year from data_date_key)
+AS `year`, 
+  `platform_name`
+AS `platform_name_2` 
+FROM (((SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `views`, 
+   `minutes`, 
+   `source`, 
+   `us_vs_intl`, 
+   CAST(NULL AS STRING) AS `country`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `views`, 
+  `minutes`, 
+  'The Roku Channel'
+AS `source`, 
+  'Unassigned'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  `the_roku_channel`.`data_date_key`, 
+  `the_roku_channel`.`platform_name`, 
+  `the_roku_channel`.`brand_name`, 
+  `the_roku_channel`.`views`, 
+  `the_roku_channel`.`minutes` 
+FROM `phonic-presence-327612`.`matillion`.`the_roku_channel`))))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   CAST(NULL AS INT64) AS `views`, 
+   `minutes`, 
+   `source`, 
+   CAST(NULL AS STRING) AS `us_vs_intl`, 
+   `country`, 
+   `us_vs_international`, 
+   `rev_filter` 
+ FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `data_date_key`, 
+  case 
+when country != 'Unassigned' then concat(platform_name," ",us_vs_international)
+else platform_name
+end
+AS `platform_name`, 
+  `brand_name`, 
+  `country`, 
+  `us_vs_international`, 
+  `minutes`, 
+  'manual'
+AS `source`, 
+  case
+when platform_name in ('Amazon Fire','DirecTV App','Freevee','GoogleTV','Seven','The Roku Channel','Twitch') then 1
+else 0
+end
+AS `rev_filter` 
+FROM ((SELECT 
+  `manual_platforms`.`data_date_key`, 
+  `manual_platforms`.`platform_name`, 
+  `manual_platforms`.`brand_name`, 
+  `manual_platforms`.`country`, 
+  `manual_platforms`.`us_vs_international`, 
+  `manual_platforms`.`minutes` 
+FROM `phonic-presence-327612`.`matillion`.`manual_platforms`)))) 
+WHERE (`rev_filter` = 1)))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   CAST(NULL AS INT64) AS `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   `us_vs_intl`, 
+   CAST(NULL AS STRING) AS `country`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter` 
+ FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `minutes`, 
+  'frequency'
+AS `source`, 
+  'Unassigned'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  `frequency`.`data_date_key`, 
+  `frequency`.`platform_name`, 
+  `frequency`.`brand_name`, 
+  `frequency`.`minutes` 
+FROM `eminent-cache-330114`.`matillion`.`frequency`)))) 
+WHERE (`platform_name` = 'Joyn' 
+      OR `platform_name` = 'Stirr' 
+      OR `platform_name` = 'Vizio' 
+      OR `platform_name` = 'Tivo' 
+      OR `platform_name` = 'Tivify')))) 
+UNION ALL 
+(SELECT 
+   `data_date_key`, 
+   `platform_name`, 
+   `brand_name`, 
+   `views`, 
+   CAST(`minutes` AS FLOAT64) AS `minutes`, 
+   `source`, 
+   `us_vs_intl`, 
+   `country`, 
+   CAST(NULL AS STRING) AS `us_vs_international`, 
+   CAST(NULL AS INT64) AS `rev_filter` 
+ FROM ((SELECT 
+  `data_date_key`, 
+  `platform_name`, 
+  `brand_name`, 
+  `views`, 
+  `minutes`, 
+  'xumo'
+AS `source`, 
+  'Unassigned'
+AS `country`, 
+  'Unassigned'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  `xumo`.`data_date_key`, 
+  `xumo`.`platform_name`, 
+  `xumo`.`brand_name`, 
+  `xumo`.`views`, 
+  `xumo`.`minutes` 
+FROM `eminent-cache-330114`.`matillion`.`xumo`))))))))) 
+GROUP BY `platform_name`, 
+         `brand_name`, 
+         `month`, 
+         `year`)) AS `b` 
+     ON `a`.`platform_name` = `b`.`platform_name`
+and
+`a`.`brand_name` = `b`.`brand_name`
+and
+`a`.`month` = `b`.`month`
+and
+`a`.`year` = `b`.`year`))))))) AS `a` 
+     LEFT OUTER JOIN 
+     ((SELECT 
+  * 
+FROM ((SELECT 
+  `platform_name`, 
+  `brand_name`, 
+  `month_int`, 
+  `year_int`, 
+  `month`, 
+  `sum_indirect_revenue`, 
+  case 
+-- when lower(platform_name) not in ('amazon fire', 'comcast', 'crackle',
+--                                    'googletv', 'imdbtv (freevee)','local now',
+--                                    'nbcu peacock','popcorn','seven','sling','twitch')
+--                                    then 1
+when lower(platform_name) not in ('') then 1
+else 0
+end
+AS `filter`, 
+  `sum_indirect_revenue`
+AS `indirect_revenue`, 
+  month
+AS `month_key` 
+FROM ((SELECT 
+  `platform_name`, 
+  `brand_name`, 
+  `month_int`, 
+  `year_int`, 
+  `month`, 
+  SUM(`indirect_revenue`) AS `sum_indirect_revenue` 
+FROM ((SELECT 
+  `month`, 
+  case
+when lower(platform_name) = 'amazon fire' then 'Amazon Fire'
+when platform_name = 'Comcast:Xumo Comcast RevShare-LOV' then 'Comcast'
+when platform_name = 'Comcast:Xumo GoogleTV' then 'GoogleTV'
+when platform_name = 'Comcast:Xumo LG' then 'LG'
+when platform_name = 'Comcast:Xumo Redbox RevSh-LOV' then 'Redbox'
+when platform_name = 'Comcast:Xumo RevShare-LOV' then 'Xumo'
+when platform_name = 'Comcast:Xumo Tivo RevSh-LOV' then 'Tivo'
+when platform_name = 'Comcast:Xumo VIDAA RevSh-LOV' then 'Vidaa'
+when platform_name = 'Comcast:Xumo Xfinity RevSh-LOV' then 'Xfinity'
+when platform_name = 'Crackle:Crackle RevSh-LOV' then 'Crackle'
+when platform_name = 'IMDbTV (Freevee)' then 'Freevee (Int + US)'
+when platform_name = 'Freevee Intl' or platform_name = "IMDbTV (Freevee) Int'"
+then 'Freevee International'
+when platform_name = 'Freevee US' or platform_name = 'IMDbTV (Freevee) US'
+then 'Freevee US'
+when platform_name = 'Joyn RevSh-LOV-EUR' then 'Joyn'
+when platform_name = 'NBC LX' then 'NBCLX'
+when platform_name = 'NBC Universal, Inc.:NBCLX-LNVD' then 'NBCLX'
+when platform_name = 'NBC Universal, Inc.:Peacock LNVD' then 'Peacock'
+when platform_name = 'Plex RevSh-LOV' then 'Plex'
+when platform_name = 'Rakuten TV-EUR' then 'Rakuten'
+when platform_name = 'Roku-TRC-RevShare' then 'The Roku Channel'
+when lower(platform_name) like '%seven%' then 'Seven'
+when platform_name = 'Sinclair Broadcast Group:Stirr RevSh-LOV' then 'Stirr'
+when lower(platform_name) like '%sling%' then 'Sling'
+when platform_name = 'Twitch Interactive, Inc:Twitch LNVD' then 'Twitch'
+when platform_name = 'Viacom Media Networks: Pluto CA' then 'Pluto International'
+when platform_name = 'Viacom Media Networks:Pluto LNVD' then 'Pluto US'
+when platform_name = 'Viacom Media Networks:Pluto LNVD EU' then 'Pluto International'
+when platform_name = 'Viacom Media Networks:Pluto LNVD LATAM' then 'Pluto International'
+
+--when lower(platform_name) = 'freevee intl' then 'Freevee International'
+when lower(platform_name) like '%pluto %' and (lower(platform_name) like '% lat%'
+or lower(platform_name) like '% eu%' or lower(platform_name) like '% can%') then 'Pluto International'
+when lower(platform_name) = 'pluto' then 'Pluto US'
+when lower(platform_name) like '%stir%' then 'Stirr'
+when lower(platform_name) like '%sling%' then 'Sling'
+when lower(platform_name) like '%seve%' then 'Seven'
+when lower(platform_name) = 'trc' then 'The Roku Channel'
+when lower(platform_name) like '%vid%' then 'Vidaa'
+when lower(platform_name) like '%viz%' then 'Vizio'
+when lower(platform_name) like '%peacoc%' then 'Peacock'
+when lower(platform_name) like '%popcorn%' then 'PopcornFlix' --uniting popcorn and popcornflix as popcornflix
+when lower(platform_name) like '%trc%' then 'The Roku Channel'
+else trim(platform_name)
+end
+AS `platform_name`, 
+  case 
+when brand_name = 'FHM' then 'At Home'
+when brand_name like '%FA%' then 'FailArmy'
+when brand_name = 'PAA' then 'People Are Awesome'
+when lower(brand_name) like '%this %' or brand_name = 'TIH' then 'This Is Happening'
+when brand_name = 'TPC' then 'The Pet Collective'
+when brand_name = 'ToH' then 'Taste of Home'
+when brand_name = 'WS' then 'WeatherSpy'
+else trim(brand_name)
+end
+AS `brand_name`, 
+  `indirect_revenue`, 
+  `platform_name_source`, 
+  extract(month from month)
+AS `month_int`, 
+  extract(year from month)
+AS `year_int`, 
+  'Undefined'
+AS `country`, 
+  'Undefined'
+AS `us_vs_intl` 
+FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `month`, 
+  `platform` AS `platform_name`, 
+  `brand` AS `brand_name`, 
+  `indirect_revenue`, 
+  `platform` AS `platform_name_source` 
+FROM ((SELECT 
+  `f_indirect_revenue`.`month`, 
+  `f_indirect_revenue`.`platform`, 
+  `f_indirect_revenue`.`brand`, 
+  `f_indirect_revenue`.`indirect_revenue` 
+FROM `phonic-presence-327612`.`linear`.`f_indirect_revenue`)))) 
+WHERE (NOT(`brand_name` = 'Jukin Media') 
+      AND NOT(`brand_name` = 'Jukin Media (MRSS)') 
+      AND NOT(`brand_name` = 'Jukin Video') 
+      AND NOT(`brand_name` = 'JukinVideo') 
+      AND NOT(`brand_name` = 'RON')))))) 
+GROUP BY `platform_name`, 
+         `brand_name`, 
+         `month_int`, 
+         `year_int`, 
+         `month`)))) 
+WHERE (`filter` = 1))) AS `b` 
+     ON `a`.`platform_name_2` = `b`.`platform_name`
+and
+`a`.`brand_name` = `b`.`brand_name`
+and 
+`a`.`month` = `b`.`month_int`
+and
+`a`.`year` = `b`.`year_int`)) 
+WHERE (NOT(`data_date_key` IS NULL))))))))
+group by all
+--) group by all order by 1,2
+)
+)))) 
+WHERE (`split` = 0))) AS `a` 
+     LEFT OUTER JOIN 
+     ((SELECT 
+  * 
+FROM ((SELECT 
+  * 
+FROM ((SELECT 
+  `platform`, 
+  `brand`, 
+  `deal_type`, 
+  coalesce(safe_divide(cast(replace(expenses_flat,",","") as float64),10000),0)
+AS `expenses_flat`, 
+  coalesce(safe_divide(cast(replace(expenses_percent,",","") as float64),10000),0)
+AS `expenses_percent`, 
+  coalesce(safe_divide(cast(replace(split_share_percent,",","") as float64),10000),0)
+AS `split_share_percent`, 
+  `data_date_key`, 
+  -- case
+-- when lower(platform) like '%fet%' then 'FetchTV'
+-- when lower(platform) like '%fub%' then 'Fubo TV App'
+-- when lower(platform) like '%ios%' then 'iOS App'
+-- when lower(platform) like '%plex in%' then 'Plex International'
+-- when lower(platform) like '%plex' then 'Plex US'
+-- when lower(platform) like '%pluto in%' then 'Pluto International'
+-- when lower(platform) like '%pluto' then 'Pluto US'
+-- when lower(platform) like '%rok%' then 'Roku'
+-- when lower(platform) like '%samsung%' and lower(platform) not like '%intern%'
+-- then 'Samsung US'
+-- when lower(platform) like '%samsung%' and lower(platform) like '%intern%'
+-- then 'Samsung International'
+-- when lower(platform) like '%viz%' then 'Vizio'
+-- when lower(platform) like '%zeas%' then 'WhaleTV+'
+-- else trim(platform)
+-- end
+
+case when platform = 'Fetch' then 'FetchTV'
+when platform = 'Fire App' then 'FireTV App'
+when platform = 'Pluto' then 'Pluto US'
+when platform = 'Pluto Intl' then 'Pluto International'
+when platform = 'Plex' then 'Plex US'
+when platform = 'Plex Intl' then 'Plex International'
+when lower(platform) like '%roku%' then 'Roku App'
+when platform = 'Zeasn' then 'WhaleTV+'
+when platform = 'iOS-App' then 'iOS App'
+else trim(platform)
+end
+AS `platform_name`, 
+  case 
+when lower(brand) like '%at%' then 'At Home'
+else coalesce(brand,'NA')
+end
+AS `brand_name` 
+FROM ((SELECT 
+  `inventory_split_revenue_share`.`platform`, 
+  `inventory_split_revenue_share`.`brand`, 
+  `inventory_split_revenue_share`.`deal_type`, 
+  `inventory_split_revenue_share`.`expenses_flat`, 
+  `inventory_split_revenue_share`.`expenses_percent`, 
+  `inventory_split_revenue_share`.`split_share_percent`, 
+  `inventory_split_revenue_share`.`data_date_key` 
+FROM `eminent-cache-330114`.`google_sheets`.`inventory_split_revenue_share`)))) 
+WHERE (`brand_name` = 'NA' 
+      AND NOT(`platform_name` = 'ROKU')))) 
+WHERE (NOT(`platform` = 'Roku App')))) AS `b` 
+     ON `a`.`platform_name_2` = `b`.`platform_name`))))))))
+where (platform_name is not null or brand_name is not null) and data_date_key is not null and data_date_key > '2017-01-01'
+group by data_date_key, platform_name, brand_name, deal_type,
+expenses_flat, expenses_percent, split_share_percent,us_vs_intl
+)
