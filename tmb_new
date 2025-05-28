@@ -1,0 +1,683 @@
+-- Final Refactored Query for TMBI Revenue Calculation
+-- This query consolidates data from multiple sources, calculates direct and indirect revenue,
+-- applies financial splits, and aggregates metrics at a daily, platform, and brand level.
+WITH
+  -- CTE 1: Consolidates and aggregates data from various raw sources (Plex, Pluto, Manual, etc.)
+  raw_source_data AS (
+    SELECT
+      data_date_key,
+      platform_name,
+      brand_name,
+      us_vs_intl,
+      SUM(minutes) AS sum_minutes,
+      SUM(CAST(views AS NUMERIC)) AS sum_views,
+      SUM(users) AS sum_users,
+      SUM(sessions) AS sum_sessions
+    FROM (
+      -- Plex data (minutes is FLOAT64, views is STRING)
+      SELECT 
+        data_date_key, 
+        CONCAT(platform_name, " ", us_vs_intl) AS platform_name, 
+        brand_name, 
+        us_vs_intl, 
+        CAST(views AS NUMERIC) AS views, 
+        minutes, 
+        NULL AS users, 
+        NULL AS sessions 
+      FROM `eminent-cache-330114`.`matillion`.`plex_direct` 
+      WHERE data_date_key > '2017-01-01'
+      
+      UNION ALL
+      
+      -- Pluto data (minutes is FLOAT64)
+      SELECT 
+        data_date_key, 
+        CONCAT(platform_name," ",us_vs_intl) AS platform_name, 
+        brand_name, 
+        us_vs_intl, 
+        NULL AS views, 
+        minutes, 
+        NULL AS users, 
+        NULL AS sessions 
+      FROM `eminent-cache-330114`.`matillion`.`pluto` 
+      WHERE data_date_key > '2017-01-01'
+      
+      UNION ALL
+      
+      -- Manual platforms data (minutes is FLOAT64)
+      SELECT 
+        data_date_key, 
+        CASE WHEN country != 'Unassigned' THEN CONCAT(platform_name," ",us_vs_international) ELSE platform_name END AS platform_name, 
+        brand_name, 
+        us_vs_international AS us_vs_intl, 
+        NULL AS views, 
+        minutes, 
+        NULL AS users, 
+        NULL AS sessions 
+      FROM `phonic-presence-327612`.`matillion`.`manual_platforms` 
+      WHERE (CASE WHEN platform_name IN ('Amazon Fire','DirecTV App','Freevee','GoogleTV','Seven','The Roku Channel','Twitch') THEN 1 ELSE 0 END) = 0 
+        AND data_date_key > '2017-01-01'
+      
+      UNION ALL
+      
+      -- Frequency data (minutes is FLOAT64)
+      SELECT 
+        data_date_key, 
+        platform_name, 
+        brand_name, 
+        NULL AS us_vs_intl, 
+        NULL AS views, 
+        CAST(minutes AS FLOAT64) AS minutes, 
+        NULL AS users, 
+        NULL AS sessions 
+      FROM `eminent-cache-330114`.`matillion`.`frequency` 
+      WHERE data_date_key > '2017-01-01'
+      
+      UNION ALL
+      
+      -- Freeview UK data (minutes is FLOAT64, views is NUMERIC)
+      SELECT 
+        data_date_key, 
+        'Freeview International' AS platform_name, 
+        brand_name, 
+        NULL AS us_vs_intl, 
+        views, 
+        minutes, 
+        NULL AS users, 
+        NULL AS sessions 
+      FROM `phonic-presence-327612`.`matillion`.`freeview_uk` 
+      WHERE data_date_key > '2017-01-01'
+      
+      UNION ALL
+      
+      -- Xumo data (minutes is FLOAT64, views is NUMERIC)
+      SELECT 
+        data_date_key, 
+        platform_name, 
+        brand_name, 
+        NULL AS us_vs_intl, 
+        views, 
+        CAST(minutes AS FLOAT64) AS minutes, 
+        NULL AS users, 
+        NULL AS sessions 
+      FROM `eminent-cache-330114`.`matillion`.`xumo` 
+      WHERE data_date_key > '2017-01-01'
+      
+      UNION ALL
+      
+      -- Ottera data (minutes is FLOAT64, views is NUMERIC, users is NUMERIC)
+      SELECT 
+        data_date_key, 
+        CONCAT(platform_name," ",us_vs_intl) AS platform_name, 
+        brand_name, 
+        us_vs_intl, 
+        views, 
+        minutes, 
+        users, 
+        NULL AS sessions 
+      FROM `eminent-cache-330114`.`matillion`.`ottera` 
+      WHERE data_date_key > '2017-01-01'
+      
+      UNION ALL
+      
+      -- Wurl data (minutes is FLOAT64, users is NUMERIC, sessions is NUMERIC)
+      SELECT 
+        data_date_key, 
+        CONCAT(platform_name," ",us_vs_intl) AS platform_name, 
+        brand_name, 
+        us_vs_intl, 
+        NULL AS views, 
+        minutes, 
+        users, 
+        sessions 
+      FROM `eminent-cache-330114`.`matillion`.`wurl` 
+      WHERE data_date_key > '2017-01-01'
+      
+      UNION ALL
+      
+      -- Cascada data (minutes is FLOAT64, views is NUMERIC)
+      SELECT 
+        data_date_key, 
+        CONCAT(platform_name," ",us_vs_intl) AS platform_name, 
+        brand_name, 
+        us_vs_intl, 
+        views, 
+        minutes, 
+        NULL AS users, 
+        NULL AS sessions 
+      FROM `eminent-cache-330114`.`matillion`.`cascada` 
+      WHERE data_date_key > '2017-01-01'
+    )
+    GROUP BY
+      data_date_key,
+      platform_name,
+      brand_name,
+      us_vs_intl
+  ),
+  -- Rest of your CTEs remain the same...
+  
+  -- CTE 2: Processes and aggregates data from SpringServe
+  springserve_data AS (
+    SELECT
+      date AS data_date_key,
+      CASE
+        WHEN platform = 'Android' THEN CONCAT('Android App ', us_v_intl)
+        WHEN platform = 'AndroidTV' THEN CONCAT('AndroidTV App ', us_v_intl)
+        WHEN platform = 'AppleTV' THEN CONCAT('tvOS App ', us_v_intl)
+        WHEN platform = 'Fetch' THEN 'FetchTV'
+        WHEN platform = 'FireTV' THEN CONCAT('FireTV App ', us_v_intl)
+        WHEN platform = 'FuboTV' THEN CONCAT('FuboTV ', us_v_intl)
+        WHEN platform = 'FreeView' THEN CONCAT('Freeview ', us_v_intl)
+        WHEN platform = 'LG' THEN CONCAT('LG ', us_v_intl)
+        WHEN platform = 'Plex' THEN CONCAT('Plex ', us_v_intl)
+        WHEN platform = 'Pluto' THEN CONCAT('Pluto ', us_v_intl)
+        WHEN platform = 'Roku' THEN CONCAT('Roku App ', us_v_intl)
+        WHEN platform = 'Vidaa' THEN CONCAT('Vidaa ', us_v_intl)
+        WHEN platform = 'Web' THEN CONCAT('Web App ', us_v_intl)
+        WHEN LOWER(platform) LIKE '%vizio%app%' THEN CONCAT('Vizio App ', us_v_intl)
+        WHEN LOWER(platform) IN ('xumo','whaletv+','tivify','directtv','fetch') THEN platform
+        WHEN platform = 'Anoki' THEN 'Anoki'
+        WHEN LOWER(platform) = 'samsungother' THEN CONCAT('Samsung Other ',us_v_intl)
+        WHEN LOWER(platform) IN ('samsungapp','samsung apps linear') THEN CONCAT('Samsung App ',us_v_intl)
+        WHEN LOWER(platform) = 'samsungtvmobile' THEN CONCAT('Samsung TV Mobile ',us_v_intl)
+        WHEN platform = 'iOS' THEN CONCAT('iOS App ',us_v_intl)
+        ELSE CONCAT(platform,' ',us_v_intl)
+      END AS platform_name,
+      CASE
+        WHEN LOWER(brand) LIKE '%fail%' THEN 'FailArmy'
+        WHEN LOWER(brand) LIKE '%people%' THEN 'People Are Awesome'
+        WHEN LOWER(brand) LIKE '%taste%' OR LOWER(brand) LIKE '%readers%' THEN 'False' -- This 'False' is from original logic
+        WHEN LOWER(brand) LIKE '%pet%' THEN 'The Pet Collective'
+        WHEN LOWER(brand) LIKE '%athom%' THEN 'At Home'
+        WHEN LOWER(brand) LIKE '%weat%' THEN 'WeatherSpy'
+        ELSE 'False' -- This 'False' is from original logic
+      END AS brand_name,
+      CASE
+        WHEN LOWER(platform) IN ('xumo','whaletv+','tivify','directtv','fetch') THEN 'Unassigned'
+        ELSE us_v_intl
+      END AS us_v_intl,
+      AVG(impressions) AS impressions,
+      AVG(requests) AS requests,
+      AVG(tmb_programmatic_revenue) AS tmb_programmatic_revenue,
+      AVG(tmb_direct_revenue) AS tmb_direct_revenue,
+      AVG(fuse_programmatic_revenue) AS fuse_programmatic_revenue,
+      AVG(fuse_direct_revenue) AS fuse_direct_revenue
+    FROM
+      `tmbi-310016`.`streaming`.`springserve_fuse_reconciled` 
+    WHERE
+      date > '2017-01-01'
+      AND platform IS NOT NULL
+      AND platform NOT IN ('#N/A','At Home with Family Handyman', 'People Are Awesome','The Pet Collective','Weatherspy') -- Excluded platforms
+      AND brand IS NOT NULL
+    GROUP BY
+      1, 2, 3, 4 -- data_date_key, platform_name, brand_name, us_v_intl
+  ),
+  -- CTE 3: Creates platform name mappings for indirect revenue logic and filtering
+  platform_indirect_mapping AS (
+    SELECT
+      platform_name_original,
+      CASE
+        WHEN LOWER(platform_name_original) LIKE '%lg%' THEN 'LG'
+        WHEN LOWER(platform_name_original) LIKE '%plex%' THEN 'Plex'
+        WHEN LOWER(platform_name_original) LIKE '%raku%' THEN 'Rakuten'
+        WHEN LOWER(platform_name_original) LIKE '%vid%' THEN 'Vidaa'
+        WHEN LOWER(platform_name_original) LIKE '%viz%' THEN 'Vizio'
+        ELSE platform_name_original
+      END AS platform_name_for_indirect, 
+      CASE
+        WHEN LOWER(platform_name_original) LIKE '%lg%' THEN 1
+        WHEN LOWER(platform_name_original) LIKE '%plex%' THEN 1
+        WHEN LOWER(platform_name_original) LIKE '%raku%' THEN 1
+        WHEN LOWER(platform_name_original) LIKE '%vid%' THEN 1
+        WHEN LOWER(platform_name_original) LIKE '%vizi%' THEN 1
+        WHEN LOWER(platform_name_original) IN ('tivify','tivo','joyn','stirr') THEN 1
+        WHEN LOWER(platform_name_original) LIKE '%plut%' THEN 1
+        ELSE 0
+      END AS indirect_filter_value -- Determines if platform is eligible for certain indirect revenue logic
+    FROM (
+      -- Collect all unique platform names from both main sources
+      SELECT platform_name AS platform_name_original FROM raw_source_data
+      UNION DISTINCT
+      SELECT platform_name AS platform_name_original FROM springserve_data
+    )
+  ),
+  -- CTE 4: Unifies player data from raw sources and SpringServe, applying platform mappings
+  unified_player_data AS (
+    SELECT
+      COALESCE(r.data_date_key, s.data_date_key) AS data_date_key,
+      COALESCE(r.platform_name, s.platform_name) AS platform_name,
+      COALESCE(r.brand_name, s.brand_name) AS brand_name,
+      COALESCE(r.us_vs_intl, s.us_v_intl) AS us_vs_intl,
+      r.sum_minutes AS minutes, -- Sum of minutes from raw sources
+      s.tmb_programmatic_revenue, -- Avg revenue from SpringServe
+      s.tmb_direct_revenue,       -- Avg revenue from SpringServe
+      s.fuse_programmatic_revenue, -- Avg revenue from SpringServe
+      s.fuse_direct_revenue,      -- Avg revenue from SpringServe
+      s.impressions,             -- Avg impressions from SpringServe
+      s.requests,                -- Avg requests from SpringServe
+      (s.tmb_programmatic_revenue + s.tmb_direct_revenue + s.fuse_programmatic_revenue + s.fuse_direct_revenue) AS platform_revenue, -- Sum of SpringServe revenues
+      pm.platform_name_for_indirect,
+      pm.indirect_filter_value,
+      pm.indirect_filter_value AS is_dual, -- Legacy name for indirect_filter_value, maintained for clarity on original logic
+      EXTRACT(MONTH FROM COALESCE(r.data_date_key, s.data_date_key)) AS month,
+      EXTRACT(YEAR FROM COALESCE(r.data_date_key, s.data_date_key)) AS year,
+      -- The AVG here is over a single row per group after the join, effectively selecting the value
+      AVG(COALESCE(s.impressions, 0)) AS avg_impressions,
+      AVG(COALESCE(s.requests, 0)) AS avg_requests,
+      AVG(COALESCE(r.sum_minutes, 0)) AS avg_minutes,
+      AVG(COALESCE(s.tmb_programmatic_revenue, 0)) AS avg_tmb_programmatic_revenue,
+      AVG(COALESCE(s.tmb_direct_revenue, 0)) AS avg_tmb_direct_revenue,
+      AVG(COALESCE(s.fuse_programmatic_revenue, 0)) AS avg_fuse_programmatic_revenue,
+      AVG(COALESCE(s.fuse_direct_revenue, 0)) AS avg_fuse_direct_revenue
+    FROM
+      raw_source_data AS r
+      FULL JOIN springserve_data AS s -- FULL JOIN to keep records from both sources
+        ON r.data_date_key = s.data_date_key
+        AND r.platform_name = s.platform_name
+        AND r.brand_name = s.brand_name
+      LEFT JOIN platform_indirect_mapping AS pm -- Augment with platform mapping for indirect revenue
+        ON COALESCE(r.platform_name, s.platform_name) = pm.platform_name_original
+    WHERE
+      -- Ensure essential identifying fields are present
+      (COALESCE(r.platform_name, s.platform_name) IS NOT NULL OR COALESCE(r.brand_name, s.brand_name) IS NOT NULL)
+      AND COALESCE(r.data_date_key, s.data_date_key) IS NOT NULL
+    GROUP BY all
+      --1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 -- Group by all non-aggregated columns
+  ),
+  -- CTE 5: Transforms indirect revenue data from the f_indirect_revenue table
+  f_indirect_revenue_transformed AS (
+    SELECT
+      month AS data_month, -- Renamed to avoid confusion with EXTRACT(MONTH...) alias 'month'
+      CASE
+        WHEN LOWER(platform) = 'amazon fire' THEN 'Amazon Fire'
+        WHEN platform = 'Comcast:Xumo Comcast RevShare-LOV' THEN 'Comcast'
+        WHEN platform = 'Comcast:Xumo GoogleTV' THEN 'GoogleTV'
+        WHEN platform = 'Comcast:Xumo LG' THEN 'LG'
+        WHEN platform = 'Comcast:Xumo Redbox RevSh-LOV' THEN 'Redbox'
+        WHEN platform = 'Comcast:Xumo RevShare-LOV' THEN 'Xumo'
+        WHEN platform = 'Comcast:Xumo Tivo RevSh-LOV' THEN 'Tivo'
+        WHEN platform = 'Comcast:Xumo VIDAA RevSh-LOV' THEN 'Vidaa'
+        WHEN platform = 'Comcast:Xumo Xfinity RevSh-LOV' THEN 'Xfinity'
+        WHEN platform = 'Crackle:Crackle RevSh-LOV' THEN 'Crackle'
+        WHEN platform = 'IMDbTV (Freevee)' THEN 'Freevee (Int + US)'
+        WHEN platform = 'Freevee Intl' OR platform = "IMDbTV (Freevee) Int'" THEN 'Freevee International'
+        WHEN platform = 'Freevee US' OR platform = 'IMDbTV (Freevee) US' THEN 'Freevee US'
+        WHEN platform = 'Joyn RevSh-LOV-EUR' THEN 'Joyn'
+        WHEN platform = 'NBC LX' THEN 'NBCLX'
+        WHEN platform = 'NBC Universal, Inc.:NBCLX-LNVD' THEN 'NBCLX'
+        WHEN platform = 'NBC Universal, Inc.:Peacock LNVD' THEN 'Peacock'
+        WHEN platform = 'Plex RevSh-LOV' THEN 'Plex'
+        WHEN platform = 'Rakuten TV-EUR' THEN 'Rakuten'
+        WHEN platform = 'Roku-TRC-RevShare' THEN 'The Roku Channel'
+        WHEN LOWER(platform) LIKE '%seven%' THEN 'Seven'
+        WHEN platform = 'Sinclair Broadcast Group:Stirr RevSh-LOV' THEN 'Stirr'
+        WHEN LOWER(platform) LIKE '%sling%' THEN 'Sling'
+        WHEN platform = 'Twitch Interactive, Inc:Twitch LNVD' THEN 'Twitch'
+        WHEN platform = 'Viacom Media Networks: Pluto CA' THEN 'Pluto International'
+        WHEN platform = 'Viacom Media Networks:Pluto LNVD' THEN 'Pluto US'
+        WHEN platform = 'Viacom Media Networks:Pluto LNVD EU' THEN 'Pluto International'
+        WHEN platform = 'Viacom Media Networks:Pluto LNVD LATAM' THEN 'Pluto International'
+        WHEN LOWER(platform) LIKE '%pluto %' AND (LOWER(platform) LIKE '% lat%' OR LOWER(platform) LIKE '% eu%' OR LOWER(platform) LIKE '% can%') THEN 'Pluto International'
+        WHEN LOWER(platform) = 'pluto' THEN 'Pluto US'
+        WHEN LOWER(platform) LIKE '%stir%' THEN 'Stirr'
+        WHEN LOWER(platform) LIKE '%sling%' THEN 'Sling'
+        WHEN LOWER(platform) LIKE '%seve%' THEN 'Seven'
+        WHEN LOWER(platform) = 'trc' THEN 'The Roku Channel'
+        WHEN LOWER(platform) LIKE '%vid%' THEN 'Vidaa'
+        WHEN LOWER(platform) LIKE '%viz%' THEN 'Vizio'
+        WHEN LOWER(platform) LIKE '%peacoc%' THEN 'Peacock'
+        WHEN LOWER(platform) LIKE '%popcorn%' THEN 'PopcornFlix'
+        ELSE TRIM(platform)
+      END AS platform_name,
+       CASE
+        WHEN LOWER(brand) = 'fhm' THEN 'At Home'
+        WHEN LOWER(brand) LIKE '%fa%' THEN 'FailArmy'
+        WHEN LOWER(brand) = 'paa' THEN 'People Are Awesome'
+        WHEN LOWER(brand) LIKE '%this %' OR LOWER(brand) = 'tih' THEN 'This Is Happening'
+        WHEN LOWER(brand) = 'tpc' THEN 'The Pet Collective'
+        WHEN LOWER(brand) = 'toh' THEN 'Taste of Home'
+        WHEN LOWER(brand) = 'ws' THEN 'WeatherSpy'
+        ELSE TRIM(brand)
+      END AS brand_name,
+      indirect_revenue,
+      EXTRACT(MONTH FROM month) AS month_int,
+      EXTRACT(YEAR FROM month) AS year_int
+    FROM
+      `phonic-presence-327612.linear.f_indirect_revenue`
+    WHERE 
+      LOWER(brand) NOT IN ('jukin media', 'jukin media (mrss)', 'jukin video', 'jukinvideo', 'ron')
+      AND month >= '2017-01-01' -- Date filter applied to the source month column
+  ),
+  -- CTE 6a: Handles direct part of indirect revenue calculation (where indirect_filter_value = 0)
+  indirect_revenue_direct_part AS (
+    SELECT
+      upd.data_date_key,
+      upd.platform_name,
+      upd.brand_name,
+      upd.us_vs_intl,
+      upd.avg_minutes AS minutes,
+      upd.avg_tmb_programmatic_revenue AS tmb_programmatic_revenue,
+      upd.avg_tmb_direct_revenue AS tmb_direct_revenue,
+      upd.avg_fuse_programmatic_revenue AS fuse_programmatic_revenue,
+      upd.avg_fuse_direct_revenue AS fuse_direct_revenue,
+      upd.avg_impressions AS impressions,
+      upd.avg_requests AS requests,
+      upd.platform_revenue,
+      0 AS indirect_revenue -- No indirect revenue for this part by definition
+    FROM
+      unified_player_data AS upd
+    WHERE
+      upd.indirect_filter_value = 0
+  ),
+  -- CTE 6b: Handles aggregated part of indirect revenue (monthly totals from f_indirect_revenue)
+  indirect_revenue_aggregated_part AS (
+    SELECT
+      CAST(NULL AS DATE) AS data_date_key, -- Explicitly cast NULL to DATE type
+      fir.platform_name,
+      fir.brand_name,
+      'Undefined' AS us_vs_intl, -- us_vs_intl is not defined in this specific aggregation
+      NULL AS minutes,
+      NULL AS tmb_programmatic_revenue,
+      NULL AS tmb_direct_revenue,
+      NULL AS fuse_programmatic_revenue,
+      NULL AS fuse_direct_revenue,
+      NULL AS impressions,
+      NULL AS requests,
+      NULL AS platform_revenue,
+      SUM(fir.indirect_revenue) AS indirect_revenue
+    FROM
+      f_indirect_revenue_transformed AS fir
+    GROUP BY
+      fir.platform_name,
+      fir.brand_name,
+      fir.data_month  -- Grouping by original month from f_indirect_revenue to get monthly sums
+  ),
+  -- CTE 6c: Handles distributed part of indirect revenue (where indirect_filter_value = 1)
+  indirect_revenue_distributed_part AS (
+    SELECT
+      upd.data_date_key,
+      upd.platform_name_for_indirect AS platform_name, -- Uses the mapped platform name
+      upd.brand_name,
+      upd.us_vs_intl,
+      upd.avg_minutes AS minutes,
+      upd.avg_tmb_programmatic_revenue AS tmb_programmatic_revenue,
+      upd.avg_tmb_direct_revenue AS tmb_direct_revenue,
+      upd.avg_fuse_programmatic_revenue AS fuse_programmatic_revenue,
+      upd.avg_fuse_direct_revenue AS fuse_direct_revenue,
+      upd.avg_impressions AS impressions,
+      upd.avg_requests AS requests,
+      NULL AS platform_revenue, -- Platform revenue is not directly applicable here; this is about distributing separate indirect revenue
+      -- Distribute summed indirect revenue based on the ratio of daily minutes to monthly minutes for the platform/brand
+      COALESCE(fir_sum.sum_indirect_revenue, 0) * COALESCE(SAFE_DIVIDE(upd.avg_minutes, monthly.sum_total_minutes_for_month_platform_brand), 0) AS indirect_revenue
+    FROM
+      unified_player_data AS upd
+      JOIN (
+        -- Calculates total minutes for a platform_name_for_indirect, brand_name, month, year combination
+        SELECT
+          platform_name_for_indirect,
+          brand_name,
+          month,
+          year,
+          SUM(avg_minutes) AS sum_total_minutes_for_month_platform_brand
+        FROM
+          unified_player_data
+        WHERE
+          indirect_filter_value = 1 -- Only for platforms/brands eligible for this type of distribution
+        GROUP BY 1, 2, 3, 4
+      ) AS monthly
+      ON upd.platform_name_for_indirect = monthly.platform_name_for_indirect
+      AND upd.brand_name = monthly.brand_name
+      AND upd.month = monthly.month
+      AND upd.year = monthly.year
+      LEFT JOIN (
+        -- Calculates sum of indirect revenue from transformed f_indirect_revenue for matching platform/brand/month/year
+        SELECT
+          platform_name,
+          brand_name,
+          month_int,
+          year_int,
+          SUM(indirect_revenue) AS sum_indirect_revenue
+        FROM
+          f_indirect_revenue_transformed
+        GROUP BY 1, 2, 3, 4
+      ) AS fir_sum
+      ON upd.platform_name_for_indirect = fir_sum.platform_name
+      AND upd.brand_name = fir_sum.brand_name
+      AND upd.month = fir_sum.month_int
+      AND upd.year = fir_sum.year_int
+    WHERE
+      upd.indirect_filter_value = 1 AND upd.data_date_key IS NOT NULL -- Ensure distribution is for specific days
+  ),
+  -- CTE 6: Combines all parts of indirect revenue calculation using UNION ALL
+  indirect_revenue_source AS (
+    SELECT * FROM indirect_revenue_direct_part
+    UNION ALL
+    SELECT * FROM indirect_revenue_aggregated_part
+    UNION ALL
+    SELECT * FROM indirect_revenue_distributed_part
+  ),
+  -- CTE 7: Processes inventory split and revenue share information from Google Sheets
+  inventory_split_info AS (
+    SELECT
+      data_date_key, -- This column from sheets was selected in original query but not used in join keys here
+      deal_type,
+      COALESCE(SAFE_DIVIDE(CAST(REPLACE(expenses_flat,",","") AS FLOAT64),10000),0) AS expenses_flat,
+      COALESCE(SAFE_DIVIDE(CAST(REPLACE(expenses_percent,",","") AS FLOAT64),10000),0) AS expenses_percent,
+      COALESCE(SAFE_DIVIDE(CAST(REPLACE(split_share_percent,",","") AS FLOAT64),10000),0) AS split_share_percent,
+      CASE
+        WHEN platform = 'Fetch' THEN 'FetchTV'
+        WHEN platform = 'Fire App' THEN 'FireTV App'
+        WHEN platform = 'Pluto' THEN 'Pluto US'
+        WHEN platform = 'Pluto Intl' THEN 'Pluto International'
+        WHEN platform = 'Plex' THEN 'Plex US'
+        WHEN platform = 'Plex Intl' THEN 'Plex International'
+        WHEN LOWER(platform) LIKE '%roku%' THEN 'Roku App'
+        WHEN platform = 'Zeasn' THEN 'WhaleTV+'
+        WHEN platform = 'iOS-App' THEN 'iOS App'
+        ELSE TRIM(platform)
+      END AS platform_name, 
+      CASE
+        WHEN LOWER(brand) LIKE '%at%' THEN 'At Home'
+        ELSE COALESCE(brand,'NA') -- Default brand to 'NA' if NULL, used in join logic
+      END AS brand_name
+    FROM
+      `eminent-cache-330114`.`google_sheets`.`inventory_split_revenue_share`
+  ),
+  -- CTE 8: Combines unified player data with the calculated indirect revenue source
+  combined_data AS (
+    SELECT
+      COALESCE(upd.data_date_key, irs.data_date_key) AS data_date_key,
+      COALESCE(upd.platform_name, irs.platform_name) AS platform_name,
+      COALESCE(upd.brand_name, irs.brand_name) AS brand_name,
+      COALESCE(upd.us_vs_intl, irs.us_vs_intl) AS us_vs_intl,
+      upd.avg_minutes AS minutes,
+      upd.avg_tmb_programmatic_revenue AS tmb_programmatic_revenue,
+      upd.avg_tmb_direct_revenue AS tmb_direct_revenue,
+      upd.avg_fuse_programmatic_revenue AS fuse_programmatic_revenue,
+      upd.avg_fuse_direct_revenue AS fuse_direct_revenue,
+      COALESCE(irs.indirect_revenue, 0) AS indirect_revenue, -- Default to 0 if no indirect revenue
+      upd.avg_impressions AS impressions,
+      upd.avg_requests AS requests,
+      upd.platform_revenue, -- Direct platform revenue from unified_player_data
+      CASE -- Platform name mapping specifically for joining with inventory split information
+          WHEN LOWER(upd.platform_name) LIKE '%android app%' THEN 'Android App'
+          WHEN LOWER(upd.platform_name) LIKE '%freevee%' THEN 'Freevee'
+          WHEN upd.platform_name = 'Freeview International' THEN 'Freeview UK'
+          WHEN LOWER(upd.platform_name) LIKE '%fubot%' THEN 'Fubo'
+          WHEN LOWER(upd.platform_name) LIKE '%firetv%' THEN 'FireTV App'
+          WHEN LOWER(upd.platform_name) LIKE '%philo%' THEN 'Philo'
+          WHEN LOWER(upd.platform_name) LIKE '%rakuten%' THEN 'Rakuten'
+          WHEN LOWER(upd.platform_name) LIKE '%samsung app%' THEN 'Samsung App'
+          WHEN LOWER(upd.platform_name) LIKE '%samsung%' AND LOWER(upd.platform_name) LIKE '%international%' THEN 'Samsung International'
+          WHEN LOWER(upd.platform_name) LIKE '%samsung%' AND upd.platform_name LIKE '% US%' THEN 'Samsung US'
+          WHEN LOWER(upd.platform_name) LIKE '%vizio%' AND upd.platform_name LIKE '% App%' THEN 'Vizio App'
+          WHEN LOWER(upd.platform_name) LIKE '%vizio%' AND upd.platform_name NOT LIKE '% App%' THEN 'Vizio'
+          WHEN LOWER(upd.platform_name) LIKE '%ios app%' THEN 'iOS App'
+          WHEN LOWER(upd.platform_name) LIKE '%roku app%' THEN 'Roku App'
+          ELSE upd.platform_name
+      END AS platform_name_for_inventory_join,
+      CASE WHEN upd.platform_name = 'Samsung US' AND upd.brand_name = 'At Home' THEN 1 ELSE 0 END AS split_flag -- Flag for specific Samsung/At Home split logic
+    FROM
+      unified_player_data AS upd
+      LEFT JOIN indirect_revenue_source AS irs -- Augment with calculated indirect revenue
+        ON upd.data_date_key = irs.data_date_key
+        AND upd.platform_name = irs.platform_name
+        AND upd.brand_name = irs.brand_name
+        AND upd.us_vs_intl = irs.us_vs_intl
+  ),
+  -- CTE 9: Joins combined data with inventory split information to add deal terms
+  data_with_splits AS (
+    SELECT
+      cd.*, -- Selects all columns from combined_data
+      isi.deal_type,
+      isi.expenses_flat,
+      isi.expenses_percent,
+      isi.split_share_percent
+    FROM
+      combined_data AS cd
+      LEFT JOIN inventory_split_info AS isi -- Augment with deal terms
+        ON cd.platform_name_for_inventory_join = isi.platform_name -- Join on the mapped platform name
+        AND (
+          -- Conditional join logic based on split_flag and brand name
+          (cd.split_flag = 1 AND cd.brand_name = isi.brand_name) -- Join on specific brand if split_flag is 1
+          OR (cd.split_flag = 0 AND isi.brand_name = 'NA' AND isi.platform_name != 'Roku App') -- Join on 'NA' brand otherwise, with Roku App exclusion for 'NA' brand
+        )
+  ),
+  -- CTE 10: Calculates final financial metrics before the last aggregation stage
+  final_calculations AS (
+    SELECT
+      data_date_key,
+      platform_name,
+      brand_name,
+      minutes,
+      tmb_programmatic_revenue,
+      tmb_direct_revenue,
+      fuse_programmatic_revenue,
+      fuse_direct_revenue,
+      indirect_revenue,
+      impressions,
+      requests,
+      platform_revenue, 
+      deal_type,
+      expenses_flat,    
+      expenses_percent, -- This is already COALESCE(..., 0) from inventory_split_info
+      split_share_percent, -- This is already COALESCE(..., 0) from inventory_split_info
+      CASE
+        WHEN us_vs_intl IS NULL AND LOWER(platform_name) LIKE '%freevi%' THEN 'International'
+        WHEN us_vs_intl IS NULL AND LOWER(platform_name) NOT LIKE '%freevi%' THEN 'Undefined'
+        ELSE us_vs_intl
+      END AS us_vs_intl,
+      
+      -- TMB's share of platform revenue after specific expenses, or full platform_revenue if no split_share_percent
+      IF(
+        split_share_percent IS NOT NULL, 
+        (platform_revenue * (1 - expenses_percent)) * split_share_percent, 
+        platform_revenue
+      ) AS tmb_total_revenue_calculated,
+  
+      -- Partner's share of platform revenue after specific expenses, or 0 if no split_share_percent
+      IF(
+        split_share_percent IS NOT NULL, 
+        (platform_revenue * (1 - expenses_percent)) * (1 - split_share_percent), 
+        0
+      ) AS non_tmb_total_revenue,
+      
+      SAFE_DIVIDE(requests, COALESCE(minutes, 0) * 1000) AS requests_1k_mins,
+      SAFE_DIVIDE(impressions, requests) AS fill_rate
+    FROM
+      data_with_splits
+  ),
+  -- CTE 11: Adds final derived metrics like CPM and revenue per 1k minutes
+  add_final_revenue_metrics AS (
+    SELECT
+      fc.*, -- Selects all columns from final_calculations
+      -- Final TMB total revenue including indirect revenue
+      fc.tmb_total_revenue_calculated + fc.indirect_revenue AS tmb_total_revenue,
+      -- CPM based on final TMB total revenue and impressions
+      SAFE_DIVIDE((fc.tmb_total_revenue_calculated + fc.indirect_revenue) * 1000, fc.impressions) AS cpm,
+      -- TMB total revenue per 1000 minutes
+      SAFE_DIVIDE((fc.tmb_total_revenue_calculated + fc.indirect_revenue), (COALESCE(fc.minutes, 0) * 1000)) AS tmb_total_revenue_1k_mins,
+      -- Non-TMB total revenue per 1000 minutes
+      SAFE_DIVIDE(fc.non_tmb_total_revenue, (COALESCE(fc.minutes, 0) * 1000)) AS non_tmb_total_revenue_1k_mins,
+      -- Platform revenue per 1000 minutes
+      SAFE_DIVIDE(fc.platform_revenue, (COALESCE(fc.minutes, 0) * 1000)) AS platform_revenue_1kmins
+    FROM
+      final_calculations AS fc
+  ),
+  -- CTE 12: Final aggregation of all metrics, grouped by specified dimensions
+  grouped_final_data AS (
+    SELECT
+      data_date_key,
+      platform_name,
+      brand_name,
+      AVG(minutes) AS minutes,
+      AVG(tmb_programmatic_revenue) AS tmb_programmatic_revenue,
+      AVG(tmb_direct_revenue) AS tmb_direct_revenue,
+      AVG(fuse_programmatic_revenue) AS fuse_programmatic_revenue,
+      AVG(fuse_direct_revenue) AS fuse_direct_revenue,
+      AVG(indirect_revenue) AS indirect_revenue,
+      AVG(impressions) AS impressions,
+      AVG(requests) AS requests,
+      AVG(requests_1k_mins) AS requests_1k_mins,
+      AVG(platform_revenue) AS platform_revenue,
+      AVG(platform_revenue_1kmins) AS platform_revenue_1kmins,
+      AVG(tmb_total_revenue) AS tmb_total_revenue,
+      AVG(tmb_total_revenue_1k_mins) AS tmb_total_revenue_1k_mins,
+      AVG(non_tmb_total_revenue) AS non_tmb_total_revenue,
+      AVG(non_tmb_total_revenue_1k_mins) AS non_tmb_total_revenue_1k_mins,
+      AVG(cpm) AS cpm,
+      AVG(fill_rate) AS fill_rate,
+      deal_type,        -- Grouping key
+      expenses_flat,    -- Grouping key
+      expenses_percent, -- Grouping key
+      split_share_percent, -- Grouping key
+      us_vs_intl        -- Grouping key
+    FROM
+      add_final_revenue_metrics
+    GROUP BY
+      data_date_key,
+      platform_name,
+      brand_name,
+      deal_type,
+      expenses_flat,
+      expenses_percent,
+      split_share_percent,
+      us_vs_intl
+  )
+-- Final SELECT statement projecting the required columns for the output
+SELECT
+  data_date_key,
+  platform_name,
+  brand_name,
+  minutes,
+  tmb_programmatic_revenue,
+  tmb_direct_revenue,
+  fuse_programmatic_revenue,
+  fuse_direct_revenue,
+  indirect_revenue,
+  impressions,
+  requests,
+  requests_1k_mins,
+  platform_revenue,
+  platform_revenue_1kmins,
+  tmb_total_revenue,
+  tmb_total_revenue_1k_mins,
+  non_tmb_total_revenue,
+  non_tmb_total_revenue_1k_mins,
+  cpm,
+  fill_rate,
+  deal_type,
+  expenses_flat,
+  expenses_percent,
+  split_share_percent,
+  us_vs_intl
+FROM
+  grouped_final_data
+where tmb_programmatic_revenue!=0
+and data_date_key>'2025-05-02'
+
+ORDER BY
+  data_date_key,
+  platform_name,
+  brand_name
+  limit 10
