@@ -12,7 +12,8 @@ WITH
       SUM(minutes) AS sum_minutes,
       SUM(CAST(views AS NUMERIC)) AS sum_views,
       SUM(users) AS sum_users,
-      SUM(sessions) AS sum_sessions
+      SUM(sessions) AS sum_sessions,
+      SUM(COALESCE(indirect_revenue, 0)) AS sum_initial_indirect_revenue
     FROM (
       -- Plex data (minutes is FLOAT64, views is STRING)
       SELECT 
@@ -23,7 +24,8 @@ WITH
         CAST(views AS NUMERIC) AS views, 
         minutes, 
         NULL AS users, 
-        NULL AS sessions 
+        NULL AS sessions,
+        indirect_revenue
       FROM `eminent-cache-330114`.`matillion`.`plex_direct` 
       WHERE data_date_key > '2017-01-01'
       
@@ -38,7 +40,8 @@ WITH
         NULL AS views, 
         minutes, 
         NULL AS users, 
-        NULL AS sessions 
+        NULL AS sessions,
+        indirect_revenue
       FROM `eminent-cache-330114`.`matillion`.`pluto` 
       WHERE data_date_key > '2017-01-01'
       
@@ -53,7 +56,8 @@ WITH
         NULL AS views, 
         minutes, 
         NULL AS users, 
-        NULL AS sessions 
+        NULL AS sessions,
+        indirect_revenue
       FROM `phonic-presence-327612`.`matillion`.`manual_platforms` 
       WHERE (CASE WHEN platform_name IN ('Amazon Fire','DirecTV App','Freevee','GoogleTV','Seven','The Roku Channel','Twitch') THEN 1 ELSE 0 END) = 0 
         AND data_date_key > '2017-01-01'
@@ -69,7 +73,8 @@ WITH
         NULL AS views, 
         CAST(minutes AS FLOAT64) AS minutes, 
         NULL AS users, 
-        NULL AS sessions 
+        NULL AS sessions,
+        indirect_revenue
       FROM `eminent-cache-330114`.`matillion`.`frequency` 
       WHERE data_date_key > '2017-01-01'
       
@@ -84,7 +89,8 @@ WITH
         views, 
         minutes, 
         NULL AS users, 
-        NULL AS sessions 
+        NULL AS sessions,
+        indirect_revenue
       FROM `phonic-presence-327612`.`matillion`.`freeview_uk` 
       WHERE data_date_key > '2017-01-01'
       
@@ -99,7 +105,8 @@ WITH
         views, 
         CAST(minutes AS FLOAT64) AS minutes, 
         NULL AS users, 
-        NULL AS sessions 
+        NULL AS sessions,
+        indirect_revenue
       FROM `eminent-cache-330114`.`matillion`.`xumo` 
       WHERE data_date_key > '2017-01-01'
       
@@ -114,7 +121,8 @@ WITH
         views, 
         minutes, 
         users, 
-        NULL AS sessions 
+        NULL AS sessions,
+        indirect_revenue
       FROM `eminent-cache-330114`.`matillion`.`ottera` 
       WHERE data_date_key > '2017-01-01'
       
@@ -129,7 +137,8 @@ WITH
         NULL AS views, 
         minutes, 
         users, 
-        sessions 
+        sessions,
+        indirect_revenue
       FROM `eminent-cache-330114`.`matillion`.`wurl` 
       WHERE data_date_key > '2017-01-01'
       
@@ -144,7 +153,8 @@ WITH
         views, 
         minutes, 
         NULL AS users, 
-        NULL AS sessions 
+        NULL AS sessions,
+        indirect_revenue
       FROM `eminent-cache-330114`.`matillion`.`cascada` 
       WHERE data_date_key > '2017-01-01'
     )
@@ -201,7 +211,8 @@ WITH
       AVG(tmb_programmatic_revenue) AS tmb_programmatic_revenue,
       AVG(tmb_direct_revenue) AS tmb_direct_revenue,
       AVG(fuse_programmatic_revenue) AS fuse_programmatic_revenue,
-      AVG(fuse_direct_revenue) AS fuse_direct_revenue
+      AVG(fuse_direct_revenue) AS fuse_direct_revenue,
+      0 AS sum_initial_indirect_revenue
     FROM
       `tmbi-310016`.`streaming`.`springserve_fuse_reconciled` 
     WHERE
@@ -256,6 +267,7 @@ WITH
       s.impressions,             -- Avg impressions from SpringServe
       s.requests,                -- Avg requests from SpringServe
       (s.tmb_programmatic_revenue + s.tmb_direct_revenue + s.fuse_programmatic_revenue + s.fuse_direct_revenue) AS platform_revenue, -- Sum of SpringServe revenues
+      COALESCE(r.sum_initial_indirect_revenue, s.sum_initial_indirect_revenue, 0) AS initial_indirect_revenue,
       pm.platform_name_for_indirect,
       pm.indirect_filter_value,
       pm.indirect_filter_value AS is_dual, -- Legacy name for indirect_filter_value, maintained for clarity on original logic
@@ -363,7 +375,7 @@ WITH
       upd.avg_impressions AS impressions,
       upd.avg_requests AS requests,
       upd.platform_revenue,
-      0 AS indirect_revenue -- No indirect revenue for this part by definition
+      upd.initial_indirect_revenue AS indirect_revenue -- No indirect revenue for this part by definition
     FROM
       unified_player_data AS upd
     WHERE
@@ -673,11 +685,9 @@ SELECT
   us_vs_intl
 FROM
   grouped_final_data
-where tmb_programmatic_revenue!=0
-and data_date_key>'2025-05-02'
+WHERE (platform_name IS NOT NULL OR brand_name IS NOT NULL) AND data_date_key IS NOT NULL AND data_date_key > '2017-01-01'
 
 ORDER BY
   data_date_key,
   platform_name,
   brand_name
-  limit 10
